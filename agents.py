@@ -1,10 +1,10 @@
 from typing import Tuple
 
 import gym
-from keras.models import Sequential
-from keras.layers import Dense, Dropout
 from keras.utils import to_categorical
 import numpy as np
+
+from models import create_MLP_model
 
 
 class NaiveLearningAgent():
@@ -17,6 +17,8 @@ class NaiveLearningAgent():
         n_training_steps: int,
         n_test_episodes: int,
         n_test_steps: int,
+        training_render: bool = False,
+        test_render: bool = False,
     ):
         """
         This agent generate several games with random actions, and learn from games with a score
@@ -28,6 +30,8 @@ class NaiveLearningAgent():
         :param n_training_steps: number of steps in one episode to gather training data.
         :param n_test_episodes: number of simulations to evaluate the model.
         :param n_test_steps: number of steps in one episode to evaluate the model.
+        :param training_render: whether to display the environment when generating training games.
+        :param test_render: whether to display the environment when playing test games.
         """
         self.env = env
         self.min_score = min_score
@@ -35,6 +39,13 @@ class NaiveLearningAgent():
         self.n_training_steps = n_training_steps
         self.n_test_episodes = n_test_episodes
         self.n_test_steps = n_test_steps
+        self.training_render = training_render
+        self.test_render = test_render
+
+        # Get number of input features (size of the observation space) and number of output
+        # categories (size of the action space)
+        self.n_features = self.env.observation_space.shape[0]
+        self.n_categories = self.env.action_space.n
 
     def get_training_data(self) -> Tuple[np.array, np.array]:
         """
@@ -55,8 +66,8 @@ class NaiveLearningAgent():
             y_episode = list()  # Store every actions of the current episode
 
             for step in range(self.n_training_steps):
-                # Comment or uncomment the following line to get the render of the game
-                # self.env.render()
+                if self.training_render:
+                    self.env.render()
 
                 # Warning: `action` is related to the previous observation
                 # Pick a random action (move left = 0, move right = 1)
@@ -82,36 +93,6 @@ class NaiveLearningAgent():
 
         return np.array(x_train), to_categorical(np.array(y_train))
 
-    def create_model(self) -> Sequential:
-        """Build and compile a binary classification model with 6 fully connected layers.
-
-        :return: a compiled model.
-        """
-        model = Sequential()
-        model.add(Dense(128, input_shape=(4, ), activation="relu"))
-        model.add(Dropout(0.5))
-
-        model.add(Dense(256, activation="relu"))
-        model.add(Dropout(0.5))
-
-        model.add(Dense(512, activation="relu"))
-        model.add(Dropout(0.5))
-
-        model.add(Dense(256, activation="relu"))
-        model.add(Dropout(0.5))
-
-        model.add(Dense(128, activation="relu"))
-        model.add(Dropout(0.5))
-
-        model.add(Dense(2, activation="softmax"))
-
-        model.compile(
-            loss="categorical_crossentropy",
-            optimizer="adam",
-            metrics=["accuracy"])
-
-        return model
-
     def predict(self):
         """
         Generate training games, create a model and make predictions for `n_test_episodes` of
@@ -119,7 +100,7 @@ class NaiveLearningAgent():
         """
         x_train, y_train = self.get_training_data()
 
-        model = self.create_model()
+        model = create_MLP_model(self.n_features, self.n_categories)
         model.fit(x_train, y_train, epochs=5)
 
         scores = []
@@ -128,8 +109,8 @@ class NaiveLearningAgent():
 
             score_episode = 0
             for step in range(self.n_test_steps):
-                # Comment or uncomment the following line to get the render of the game
-                # self.env.render()
+                if self.test_render:
+                    self.env.render()
 
                 # Get the model's prediction
                 action = np.argmax(model.predict(observation.reshape(1, 4)))

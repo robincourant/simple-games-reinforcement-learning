@@ -12,6 +12,8 @@ def main():
         n_training_steps=500,
         n_test_episodes=100,
         n_test_steps=500,
+        training_render=False,
+        test_render=False,
     )
     agent.predict()
     env.close()

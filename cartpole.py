@@ -1,22 +1,74 @@
+from bokeh.plotting import show
 import gym
+import numpy as np
 
-from agents import NaiveLearningAgent
+from basic_plots import frequency_plot
+from agents import NaiveLearningAgent, RandomAgent
+
+
+def display_score_vs_threshold(
+    env: gym.Env,
+    n_trials: int,
+):
+    """
+    Display (in html format) the chart of the distribution of scores
+    for a given number of trials.
+
+    :param env: gym enviroment object.
+    :param n_trials: number of trials to generate.
+    """
+    max_score = env.spec.max_episode_steps
+    random_agent = RandomAgent(
+        env=env,
+        n_trials=n_trials,
+        render=False,
+    )
+    scores = random_agent.play()
+
+    samples_distribution = list()
+    for _threshold in np.arange(0, max_score, 5):
+        inds, = np.where(scores > _threshold)
+        samples_distribution.append(inds.size)
+
+    distribution_plot = frequency_plot(np.array(scores), max_score + 1, (0, max_score),
+                                       f"Distribution of scores (for {n_trials:.0e} trials)",
+                                       "Score", "Number of trials")
+
+    show(distribution_plot)
 
 
 def main():
-    env = gym.make("CartPole-v0")
+    # Cart-Pole-v0
+    env_v0 = gym.make("CartPole-v0")
     agent = NaiveLearningAgent(
-        env=env,
-        min_score=50,
-        n_training_episodes=10000,
-        n_training_steps=500,
-        n_test_episodes=100,
-        n_test_steps=500,
+        env=env_v0,
+        min_score=70,
+        n_training_trials=int(10e3),
+        n_testing_trials=100,
         training_render=False,
-        test_render=False,
+        testing_render=False,
     )
-    agent.predict()
-    env.close()
+    scores_v0 = agent.play()
+    print(f"Average score for 100 trials (v0): {np.mean(scores_v0)}")
+    print()
+    env_v0.close()
+
+    # Cart-Pole-v1
+    env_v1 = gym.make("CartPole-v1")
+    display_score_vs_threshold(env_v1, int(10e3))
+    env_v1.close()
+
+    # agent = NaiveLearningAgent(
+    #     env=env_v1s,
+    #     min_score=50,
+    #     n_training_trials=10000,
+    #     n_testing_trials=100,
+    #     training_render=False,
+    #     testing_render=False,
+    # )
+    # scores_v1 = agent.play()
+    # print(f"Average score for 100 trials (v1): {np.mean(scores_v1)}")
+    # print()
 
 
 if __name__ == '__main__':

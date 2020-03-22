@@ -13,16 +13,16 @@ class RandomAgent():
     def __init__(
         self,
         env: gym.Env,
-        n_trials: int,
+        n_episodes: int,
         render: bool = False,
     ):
         """
         :param env: gym enviroment object.
-        :param n_trials: number of trials to generate.
+        :param n_episodes: number of trials to generate.
         :param render: whether to display the environment when generating trials.
         """
         self.env = env
-        self.n_trials = n_trials
+        self.n_episodes = n_episodes
         self.render = render
 
         # Get the maximum number of step per trial
@@ -36,7 +36,7 @@ class RandomAgent():
         """
         scores = list()
 
-        for trial in range(self.n_trials):
+        for trial in range(self.n_episodes):
             observation = self.env.reset()
             score_trial = 0
 
@@ -69,23 +69,23 @@ class NaiveLearningAgent():
         self,
         env: gym.Env,
         min_score: int,
-        n_training_trials: int,
-        n_testing_trials: int = 100,
+        n_training_episodes: int,
+        n_testing_episodes: int = 100,
         training_render: bool = False,
         testing_render: bool = False,
     ):
         """
         :param env: gym enviroment object.
         :param min_score: minimum score to take into account an trial in the training data.
-        :param n_training_trials: number of trials to gather training data.
-        :param n_testing_trials: number of trials to evaluate the model (default = 100 trials).
+        :param n_training_episodes: number of trials to gather training data.
+        :param n_testing_episodes: number of trials to evaluate the model (default = 100 trials).
         :param training_render: whether to display the environment when generating training trials.
         :param testing_render: whether to display the environment when playing test trials.
         """
         self.env = env
         self.min_score = min_score
-        self.n_training_trials = n_training_trials
-        self.n_testing_trials = n_testing_trials
+        self.n_training_episodes = n_training_episodes
+        self.n_testing_episodes = n_testing_episodes
         self.training_render = training_render
         self.testing_render = testing_render
 
@@ -98,7 +98,7 @@ class NaiveLearningAgent():
 
     def get_training_data(self) -> Tuple[np.array, np.array]:
         """
-        Generate `n_training_trials` with `n_max_steps` and keep only trials' data whith a
+        Generate `n_training_episodes` with `n_max_steps` and keep only trials' data whith a
         score greater than `min_score`.
 
         :return: observation of each steps and their related actions.
@@ -107,7 +107,7 @@ class NaiveLearningAgent():
         y_train = list()  # Store every actions of all trials
         scores = list()   # Store every scores of all trials
 
-        for trial in range(self.n_training_trials):
+        for trial in range(self.n_training_episodes):
             observation = self.env.reset()
 
             score_trial = 0
@@ -145,7 +145,7 @@ class NaiveLearningAgent():
 
     def play(self) -> np.array:
         """
-        Generate training trials, create a model and make predictions for `n_testing_trials` of
+        Generate training trials, create a model and make predictions for `n_testing_episodes` of
         `n_max_steps`.
 
         :return: list of scores of all predicted trials.
@@ -156,7 +156,7 @@ class NaiveLearningAgent():
         model.fit(x_train, y_train, epochs=5)
 
         scores = []
-        for _ in range(self.n_testing_trials):
+        for _ in range(self.n_testing_episodes):
             observation = self.env.reset()
 
             score_trial = 0

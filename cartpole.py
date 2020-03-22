@@ -8,19 +8,19 @@ from agents import NaiveLearningAgent, RandomAgent
 
 def display_score_vs_threshold(
     env: gym.Env,
-    n_trials: int,
+    n_episodes: int,
 ):
     """
     Display (in html format) the chart of the distribution of scores
     for a given number of trials.
 
     :param env: gym enviroment object.
-    :param n_trials: number of trials to generate.
+    :param n_episodes: number of trials to generate.
     """
     max_score = env.spec.max_episode_steps
     random_agent = RandomAgent(
         env=env,
-        n_trials=n_trials,
+        n_episodes=n_episodes,
         render=False,
     )
     scores = random_agent.play()
@@ -31,7 +31,7 @@ def display_score_vs_threshold(
         samples_distribution.append(inds.size)
 
     distribution_plot = frequency_plot(np.array(scores), max_score + 1, (0, max_score),
-                                       f"Distribution of scores (for {n_trials:.0e} trials)",
+                                       f"Distribution of scores (for {n_episodes:.0e} trials)",
                                        "Score", "Number of trials")
 
     show(distribution_plot)
@@ -43,8 +43,8 @@ def main():
     agent = NaiveLearningAgent(
         env=env_v0,
         min_score=70,
-        n_training_trials=int(10e3),
-        n_testing_trials=100,
+        n_training_episodes=int(10e3),
+        n_testing_episodes=100,
         training_render=False,
         testing_render=False,
     )
@@ -55,14 +55,14 @@ def main():
 
     # Cart-Pole-v1
     env_v1 = gym.make("CartPole-v1")
-    display_score_vs_threshold(env_v1, int(10e3))
+    # display_score_vs_threshold(env_v1, int(10e3))
     env_v1.close()
 
     # agent = NaiveLearningAgent(
     #     env=env_v1s,
     #     min_score=50,
-    #     n_training_trials=10000,
-    #     n_testing_trials=100,
+    #     n_training_episodes=10000,
+    #     n_testing_episodes=100,
     #     training_render=False,
     #     testing_render=False,
     # )

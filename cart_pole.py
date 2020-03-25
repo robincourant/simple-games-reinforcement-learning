@@ -3,16 +3,21 @@ import gym
 import numpy as np
 
 from basic_plots import frequency_plot
-from agents import NaiveLearningAgent, RandomAgent, DeepQLearningAgent
+from agents import (
+    DeepQLearningAgent,
+    # KeyboardAgent,
+    # NaiveLearningAgent,
+    RandomAgent,
+)
 
 
-def display_score_vs_threshold(
+def display_random_score_vs_threshold(
     env: gym.Env,
     n_episodes: int,
 ):
     """
     Display (in html format) the chart of the distribution of scores
-    for a given number of trials.
+    of a random agent for a given number of trials.
 
     :param env: gym enviroment object.
     :param n_episodes: number of trials to generate.
@@ -35,8 +40,11 @@ def display_score_vs_threshold(
 
 def main():
     # Cart-Pole-v0
+    # keys_to_action = {(275, ): 1, (276, ): 0}
+    reward_threshold = 195
     env_v0 = gym.make("CartPole-v0")
-    agent = DeepQLearningAgent(env_v0, 195)
+    agent = DeepQLearningAgent(env_v0, reward_threshold)
+    agent.play(n_episodes=100, render=True)
     env_v0.close()
 
 

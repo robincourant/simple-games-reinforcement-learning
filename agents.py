@@ -1,6 +1,6 @@
 import pickle
 import random
-from time import time
+from time import time, sleep
 from typing import Any, List, Tuple
 
 import gym
@@ -17,7 +17,7 @@ class Agent:
     def __init__(
         self,
         env: gym.Env,
-        reward_threshold: int,
+        reward_threshold: int = -np.inf,
     ):
         """
         :param env: gym enviroment object.
@@ -31,6 +31,124 @@ class Agent:
         self.n_max_steps = self.env.spec.max_episode_steps
         self.action_space_size = self.env.action_space.n
         self.state_space_size = self.env.observation_space.shape
+
+
+class KeyboardAgent(Agent):
+    """Keyboard policy."""
+
+    # Up: 273 -> 65362 / Down: 274 -> 65364 / Left: 276 -> 65361 / Right: 275 -> 65363
+    # Spacebar: 27 -> 32 / r: 114 -> 114
+    # NanoNotes: http://en.qi-hardware.com/wiki/Key_codes
+    # keysym: http://www.tcl.tk/man/tcl8.4/TkCmd/keysyms.htm
+    keysyms_to_NanoNotes = {65362: 273, 65364: 274, 65363: 275, 65361: 276, 32: 27, 114: 114}
+
+    def __init__(self, *args, keys_to_action=None):
+        super().__init__(*args)
+
+        self.action = 0
+        self.restart = False
+        self.pause = False
+
+        if not keys_to_action:
+            try:
+                self.keys_to_action = self.env.get_keys_to_action()
+            except AttributeError:
+                pass
+
+            try:
+                self.keys_to_action = self.env.unwrapped.get_keys_to_action()
+            except AttributeError:
+                print(f"{self.env.spec.id} does not have explicit key to action mapping, "
+                      "please specify one manually")
+        else:
+            self.keys_to_action = keys_to_action
+
+        self.NO_ACTION_KEY = self.keys_to_action[()] if () in self.keys_to_action else 0
+        self.RESTART_KEY = 114
+        self.PAUSE_KEY = 27
+
+    def key_press(
+        self,
+        symbol: int,
+        modifiers: int,
+    ):
+        """Update `action` variable when a key is pressed.
+
+        :param symbol: key symbol pressed.
+        :param modifiers: bitwise combination of the key modifiers active.
+        """
+        print(symbol, modifiers)
+        print()
+        key = KeyboardAgent.keysyms_to_NanoNotes.get(symbol)
+        if symbol:
+            if key == self.RESTART_KEY:
+                self.restart = not self.restart
+            if key == self.PAUSE_KEY:
+                self.pause = not self.pause
+            if (key, ) in self.keys_to_action:
+                self.action = self.keys_to_action[(key, )]
+
+    def key_release(
+        self,
+        symbol: int,
+        modifiers: int,
+    ):
+        """Update `action` variable when a key is released.
+
+        :param symbol: key symbol pressed.
+        :param modifiers: bitwise combination of the key modifiers active.
+        """
+        key = KeyboardAgent.keysyms_to_NanoNotes.get(symbol)
+        if symbol:
+            if (key, ) in self.keys_to_action:
+                if self.action == self.keys_to_action[(key, )]:
+                    self.action = self.NO_ACTION_KEY
+
+    def play(
+        self,
+        n_episodes: int = 1,
+    ) -> np.array:
+        """Generate `n_episodes` trials and return every scores.
+
+        :param n_episodes: number of trials to generate (default: 1 trial).
+        :return: list of scores of all predicted trials.
+        """
+        self.env.reset()
+        self.env.render()
+        self.env.unwrapped.viewer.window.on_key_press = self.key_press
+        self.env.unwrapped.viewer.window.on_key_release = self.key_release
+
+        scores = list()
+        k_episode = 0
+        while k_episode < n_episodes:
+            self.env.reset()
+            self.restart = False
+            score_trial = 0
+
+            k_step = 0
+            while k_step < self.n_max_steps:
+                self.env.render()
+                # Warning: `action` is related to the previous state
+                _, reward, done, _ = self.env.step(self.action)
+                score_trial += reward
+                k_step += 1
+                # Check whether the user wants to pause the trial
+                while self.pause:
+                    self.env.render()
+                    self.pause
+                # Check whether the user wants to restart the trial
+                if self.restart:
+                    break
+                # Check whether the game is over or not
+                if done:
+                    break
+
+                sleep(0.01)
+
+            scores.append(score_trial)
+            k_episode += 1
+
+        return np.array(scores)
 
 
 class RandomAgent(Agent):
@@ -57,12 +175,11 @@ class RandomAgent(Agent):
                     self.env.render()
 
                 # Warning: `action` is related to the previous state
-                # Pick a random action (move left = 0, move right = 1)
                 action = np.random.randint(0, self.action_space_size)
                 _, reward, done, _ = self.env.step(action)
                 score_trial += reward
 
-                # Check wether the game is over or not
+                # Check whether the game is over or not
                 if done:
                     break
 
@@ -124,7 +241,7 @@ class NaiveLearningAgent(Agent):
                 score_trial += reward
                 state = new_state
 
-                # Check wether the game is over or not
+                # Check whether the game is over or not
                 if done:
                     break
 
@@ -184,7 +301,7 @@ class NaiveLearningAgent(Agent):
                     state.reshape(1, self.state_space_size[0])))
                 state, reward, done, _ = self.env.step(action)
                 score_trial += reward
-                # Check wether the game is over or not
+                # Check whether the game is over or not
                 if done:
                     break
 
@@ -370,7 +487,7 @@ class DeepQLearningAgent(Agent):
                     state.reshape(1, self.state_space_size[0])))
                 state, reward, done, _ = self.env.step(action)
                 score_trial += reward
-                # Check wether the game is over or not
+                # Check whether the game is over or not
                 if done:
                     break
 

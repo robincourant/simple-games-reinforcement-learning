@@ -354,7 +354,7 @@ class DeepQLearningAgent(Agent):
 
     def get_action(
         self,
-        state
+        state: np.array,
     ) -> int:
         """
         Select a random action whith probability `epsilon` or select the best
@@ -370,11 +370,11 @@ class DeepQLearningAgent(Agent):
 
     def store_transition(
         self,
-        state,
-        action,
-        reward,
-        new_state,
-        done,
+        state: np.array,
+        action: int,
+        reward: int,
+        new_state: np.array,
+        done: bool,
     ):
         """Store the agent’s experiences in replay memory.
 

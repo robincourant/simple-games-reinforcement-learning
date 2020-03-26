@@ -34,7 +34,7 @@ class Agent:
 
 
 class KeyboardAgent(Agent):
-    """Keyboard policy."""
+    """Keyboard policy. Press 'r' to restart a trial and spacebar to pause it."""
 
     # Up: 273 -> 65362 / Down: 274 -> 65364 / Left: 276 -> 65361 / Right: 275 -> 65363
     # Spacebar: 27 -> 32 / r: 114 -> 114
@@ -77,8 +77,6 @@ class KeyboardAgent(Agent):
         :param symbol: key symbol pressed.
         :param modifiers: bitwise combination of the key modifiers active.
         """
-        print(symbol, modifiers)
-        print()
         key = KeyboardAgent.keysyms_to_NanoNotes.get(symbol)
         if symbol:
             if key == self.RESTART_KEY:

@@ -12,7 +12,7 @@ def main():
     reward_threshold = -190
     env = gym.make("MountainCar-v0")
     agent = DeepQLearningAgent(env, reward_threshold)
-    agent.play(n_episodes=100, render=True)
+    # agent.play(n_episodes=100, render=True)
     env.close()
 
 

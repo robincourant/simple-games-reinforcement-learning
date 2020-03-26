@@ -44,7 +44,7 @@ def main():
     reward_threshold = 195
     env_v0 = gym.make("CartPole-v0")
     agent = DeepQLearningAgent(env_v0, reward_threshold)
-    agent.play(n_episodes=100, render=True)
+    # agent.play(n_episodes=100, render=True)
     env_v0.close()
 
 

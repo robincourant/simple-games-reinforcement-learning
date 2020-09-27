@@ -4,12 +4,18 @@ from time import time, sleep
 from typing import Any, List, Tuple
 
 import gym
-from keras.models import Sequential
-from keras.utils import to_categorical
-from keras.optimizers import Adam
 import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.optimizers import Adam
 
-from models import create_mlp_model, save_model
+from models import (
+    create_actor_mlp,
+    create_basic_mlp,
+    create_critic_mlp,
+    save_model
+)
 
 
 class Agent:
@@ -29,8 +35,39 @@ class Agent:
 
         # Get the maximum number of step per trial and the size of the action and state space
         self.n_max_steps = self.env.spec.max_episode_steps
-        self.action_space_size = self.env.action_space.n
-        self.state_space_size = self.env.observation_space.shape
+        if isinstance(self.env.action_space, gym.spaces.discrete.Discrete):
+            self.action_space_size = self.env.action_space.n
+        if isinstance(self.env.action_space, gym.spaces.box.Box):
+            self.action_space_size = self.env.action_space.shape[0]
+        self.state_space_size = self.env.observation_space.shape[0]
+
+    @staticmethod
+    def store_transition(
+        replay_memory: List[List[Any]],
+        state: np.array,
+        action: int,
+        reward: int,
+        new_state: np.array,
+        done: bool,
+    ):
+        """Store the agent’s experiences in replay memory.
+
+        :replay_memory:
+        :param state: agent's observation of the current environment.
+        :param action: an action provided by the agent.
+        :param reward: amount of reward returned after previous action.
+        :param new_state: agent's observation of the next environment.
+        :param done: whether the episode has ended.
+        """
+        replay_memory.append([state, action, reward, new_state, done])
+
+    @staticmethod
+    def update_weights(main_model, target_model, tau):
+        main_weights = main_model.get_weights()
+        target_weights = target_model.get_weights()
+        for i in range(len(target_weights)):
+            target_weights[i] = main_weights[i] * tau + target_weights[i] * (1 - tau)
+        target_model.set_weights(target_weights)
 
 
 class KeyboardAgent(Agent):
@@ -210,14 +247,14 @@ class NaiveLearningAgent(Agent):
         self,
     ) -> Tuple[np.array, np.array]:
         """
-        Generate `n_training_episodes` with `n_max_steps` and keep only trials' data whith a
+        Generate `n_training_episodes` with `n_max_steps` and keep only trials' data with a
         score greater than `min_score`.
 
         : return: state of each steps and their related actions.
         """
-        # minimum score to take into account an trial in the training data
-        min_score = 70
-        # number of trials to gather training data
+        # Minimum score to take into account an trial in the training data
+        min_score = 70  # TODO
+        # Number of trials to gather training data
         n_episodes = int(10e3)
 
         x_train = list()  # Store every states of all trials
@@ -267,8 +304,8 @@ class NaiveLearningAgent(Agent):
         """
         x_train, y_train = self.get_training_data()
 
-        model = create_mlp_model(
-            n_features=self.state_space_size[0],
+        model = create_basic_mlp(
+            n_features=self.state_space_size,
             n_categories=self.action_space_size,
             loss="categorical_crossentropy",
             proba_output=True,
@@ -298,8 +335,7 @@ class NaiveLearningAgent(Agent):
                     self.env.render()
 
                 # Get the model's prediction
-                action = np.argmax(self.model.predict(
-                    state.reshape(1, self.state_space_size[0])))
+                action = np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
                 state, reward, done, _ = self.env.step(action)
                 score_trial += reward
                 # Check whether the game is over or not
@@ -311,8 +347,8 @@ class NaiveLearningAgent(Agent):
         return np.array(scores)
 
 
-class DeepQLearningAgent(Agent):
-    """Policy learnt throught deep Q-learning."""
+class DQNAgent(Agent):
+    """Policy learnt through deep Q-learning (Deep Q-Network)."""
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -336,21 +372,17 @@ class DeepQLearningAgent(Agent):
         except FileNotFoundError:
             print("No existing model. Training one ...")
             t0 = time()
-            self.model = create_mlp_model(
-                n_features=self.state_space_size[0],
+            self.model = create_basic_mlp(
+                n_features=self.state_space_size,
                 n_categories=self.action_space_size,
-                batch_size=32,
                 loss="mean_squared_error",
-                optimizer=Adam(lr=self.learning_rate),
-                proba_output=False,
+                optimizer=Adam(lr=self.learning_rate)
             )
-            self.target_model = create_mlp_model(
-                n_features=self.state_space_size[0],
+            self.target_model = create_basic_mlp(
+                n_features=self.state_space_size,
                 n_categories=self.action_space_size,
-                batch_size=32,
                 loss="mean_squared_error",
-                optimizer=Adam(lr=self.learning_rate),
-                proba_output=False,
+                optimizer=Adam(lr=self.learning_rate)
             )
             self.model = self.train_model()
             print(f"Model trained in {time() - t0:.2f}s.")
@@ -362,8 +394,8 @@ class DeepQLearningAgent(Agent):
         state: np.array,
     ) -> int:
         """
-        Select a random action whith probability `epsilon` or select the best
-        action provided by `model`.
+        Select a random action with probability `epsilon` or select the best
+        action provided by the model.
 
         :param state: agent's observation of the current environment.
         :return: selected action.
@@ -372,24 +404,6 @@ class DeepQLearningAgent(Agent):
         if np.random.random() < self.epsilon:
             return self.env.action_space.sample()
         return np.argmax(self.model.predict(state)[0])
-
-    def store_transition(
-        self,
-        state: np.array,
-        action: int,
-        reward: int,
-        new_state: np.array,
-        done: bool,
-    ):
-        """Store the agent’s experiences in replay memory.
-
-        :param state: agent's observation of the current environment.
-        :param action: an action provided by the agent.
-        :param reward: amount of reward returned after previous action.
-        :param new_state: agent's observation of the next environment.
-        :param done: whether the episode has ended.
-        """
-        self.replay_memory.append([state, action, reward, new_state, done])
 
     def replay(
         self
@@ -409,22 +423,12 @@ class DeepQLearningAgent(Agent):
         # Find best actions predicted by current Q-values
         Q_values = self.target_model.predict(states)
         Q_next = np.amax(self.target_model.predict(new_states), axis=1).reshape(self.batch_size, -1)
-        # Terminal states' rewards are not changed, but cumulative dicounted reward is added to
+        # Terminal states' rewards are not changed, but cumulative discounted reward is added to
         # non-terminal states' rewards, and update Q-values
         new_rewards = (rewards + ((1 - dones) * Q_next * self.gamma)).reshape(self.batch_size, -1)
         np.put_along_axis(Q_values, actions.reshape(self.batch_size, -1), new_rewards, axis=1)
 
         self.model.fit(states, Q_values, epochs=1, verbose=0)
-
-    def update_weights(
-        self
-    ):
-        """Update weights of the main main with weights of the target model."""
-        weights = self.model.get_weights()
-        target_weights = self.target_model.get_weights()
-        for i in range(len(target_weights)):
-            target_weights[i] = weights[i] * self.tau + target_weights[i] * (1 - self.tau)
-        self.target_model.set_weights(target_weights)
 
     def train_model(
         self
@@ -436,7 +440,7 @@ class DeepQLearningAgent(Agent):
         for trial in range(self.max_training_episode):
             t0 = time()
             score_trial = 0
-            state = self.env.reset().reshape(1, self.state_space_size[0])
+            state = self.env.reset().reshape(1, self.state_space_size)
 
             for step in range(self.n_max_steps):
                 if self.training_render:
@@ -444,10 +448,10 @@ class DeepQLearningAgent(Agent):
                 # Select a random action or the best prediction of `model`
                 action = self.get_action(state)
                 new_state, reward, done, _ = self.env.step(action)
-                new_state = new_state.reshape(1, self.state_space_size[0])
-                self.store_transition(state, action, reward, new_state, done)
+                new_state = new_state.reshape(1, self.state_space_size)
+                self.store_transition(self.replay_memory, state, action, reward, new_state, done)
                 self.replay()
-                self.update_weights()
+                self.update_weights(self.model, self.target_model, self.tau)
 
                 state = new_state
                 score_trial += reward
@@ -486,8 +490,215 @@ class DeepQLearningAgent(Agent):
                     self.env.render()
 
                 # Get the model's prediction
-                action = np.argmax(self.model.predict(
-                    state.reshape(1, self.state_space_size[0])))
+                action = np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
+                state, reward, done, _ = self.env.step(action)
+                score_trial += reward
+                # Check whether the game is over or not
+                if done:
+                    break
+
+            scores.append(score_trial)
+            print(f"score_trial: {score_trial}")
+
+        return np.array(scores)
+
+
+class ACAgent(Agent):
+    """(Actor Critic)."""
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+        self.replay_memory: List[List[Any]] = list()
+        self.gamma = 0.95
+        self.epsilon = 1.0
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.995
+        self.learning_rate = 0.001
+        self.optimizer = tf.keras.optimizers.Adam(self.learning_rate)
+        self.tau = .125
+        self.batch_size = 32
+        self.training_render = False
+        self.max_training_episode = 500
+        self.save = False
+
+        # file_path = "/".join(["models", self.env_name, "deep_Q_learning_agent.pkl"])
+        # try:
+        #     self.model = pickle.load(open(file_path, "rb"))
+        #     print("Model loaded.")
+        # except FileNotFoundError:
+        #     print("No existing model. Training one ...")
+
+        t0 = time()
+        # Actor model parameterisation
+        self.actor_model = create_actor_mlp(self.state_space_size, self.action_space_size)
+        self.target_actor_model = create_actor_mlp(self.state_space_size, self.action_space_size)
+
+        # Critic model parameterisation
+        self.critic_model = create_critic_mlp(self.state_space_size, self.action_space_size)
+        self.target_critic_model = create_critic_mlp(self.state_space_size, self.action_space_size)
+
+        self.actor_model, self.target_model = self.train_model()
+        print(f"Model trained in {time() - t0:.2f}s.")
+
+    def get_action(
+        self,
+        state: np.array,
+    ) -> int:
+        """
+        Select a random action with probability `epsilon` or select the best
+        action provided by the model.
+
+        :param state: agent's observation of the current environment.
+        :return: selected action.
+        """
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+        if np.random.random() < self.epsilon:
+            return self.env.action_space.sample()
+        return np.argmax(self.actor_model.predict(state)[0])
+
+    def _fit_actor_model(
+        self,
+        states,
+    ):
+        """
+        """
+        @tf.function
+        def compute_critic_gradient(
+            critic_model,
+            state_input,
+            action_input,
+        ):
+            """
+            """
+            action_tensor = tf.convert_to_tensor(action_input)
+            with tf.GradientTape() as tape:
+                tape.watch(action_tensor)
+                predicted_valuation = critic_model([state_input, action_input], training=True)
+            critic_gradient = tape.gradient(predicted_valuation, action_tensor)
+
+            return critic_gradient
+
+        @tf.function
+        def optimize_actor_weights(
+            actor_model,
+            optimizer,
+            states,
+            critic_gradient,
+        ):
+            """
+            """
+            with tf.GradientTape() as tape:
+                predicted_actions = actor_model(states, training=True)
+
+            actor_weights = actor_model.trainable_weights
+            actor_critic_gradient = tape.gradient(predicted_actions, actor_weights, critic_gradient)
+            optimizer.apply_gradients(zip(actor_critic_gradient, actor_model.trainable_weights))
+
+        predicted_actions = self.actor_model.predict(states)
+        critic_gradient = compute_critic_gradient(self.critic_model, states, predicted_actions)
+        optimize_actor_weights(self.actor_model, self.optimizer, states, critic_gradient)
+
+    def _fit_critic_model(
+        self,
+        states,
+        new_states,
+        dones,
+        rewards,
+        actions,
+    ):
+        """
+        """
+        predicted_actions = to_categorical(
+            np.argmax(self.target_actor_model(new_states,  training=True), axis=1),
+            self.action_space_size
+        )
+        predicted_rewards = self.critic_model([new_states, predicted_actions], training=True).numpy()
+        # Terminal states' rewards are not changed, but cumulative discounted reward is added to
+        # non-terminal states' rewards, and update Q-values
+        new_rewards = (rewards + ((1 - dones) * predicted_rewards * self.gamma)).reshape(self.batch_size, -1)
+        self.critic_model.fit([states, actions], new_rewards, verbose=0)
+
+    def replay(
+        self
+    ):
+        # Check there is enough sample to feed the model
+        if len(self.replay_memory) < self.batch_size:
+            return
+
+        # Pick `batch_size` random samples from `replay_memory`
+        samples = np.array(random.sample(self.replay_memory, self.batch_size))
+        states = np.array([it[0] for it in samples]).reshape(self.batch_size, -1)
+        new_states = np.array([it[3] for it in samples]).reshape(self.batch_size, -1)
+        dones = np.array([it[4] for it in samples]).reshape(self.batch_size, -1)
+        rewards = np.array([it[2] for it in samples]).reshape(self.batch_size, -1)
+        actions = np.array([it[1] for it in samples]).reshape(self.batch_size, -1)
+
+        actions = to_categorical(actions, self.action_space_size)
+
+        self._fit_critic_model(states, new_states, dones, rewards, actions)
+        self._fit_actor_model(states)
+
+    def train_model(
+        self
+    ) -> Sequential:
+        """"""
+        for trial in range(self.max_training_episode):
+            t0 = time()
+            score_trial = 0
+            state = self.env.reset().reshape(1, self.state_space_size)
+
+            for step in range(self.n_max_steps):
+                if self.training_render:
+                    self.env.render()
+
+                # Select a random action or the best prediction of `actor_model`
+                action = self.get_action(state)
+                new_state, reward, done, _ = self.env.step(action)
+                new_state = new_state.reshape(1, self.state_space_size)
+                self.store_transition(self.replay_memory, state, action, reward, new_state, done)
+                self.replay()
+                self.update_weights(self.actor_model, self.target_actor_model, self.tau)
+                self.update_weights(self.critic_model, self.target_critic_model, self.tau)
+
+                state = new_state
+                score_trial += reward
+
+                if done:
+                    break
+
+            # Check whether the trial is completed or not
+            if score_trial <= self.reward_threshold:
+                print(f"Failed to complete in trial {trial} "
+                      f"(score: {score_trial}, time: {time() - t0:.2f}s)")
+            else:
+                print(f"Completed in {trial+1} trials "
+                      f"(score: {score_trial}, time: {time() - t0:.2f}s)")
+                return self.actor_model, self.critic_model
+
+    def play(
+        self,
+        n_episodes: int = 100,
+        render: bool = True,
+    ) -> np.array:
+        """
+        Generate `n_episodes` trials and return every scores.
+
+        :param n_episodes: number of trials to generate (default: 100 trials).
+        :param render: whether to display the environment when generating trials default: False).
+        :return: list of scores of all predicted trials.
+        """
+        scores = []
+        for _ in range(n_episodes):
+            state = self.env.reset()
+
+            score_trial = 0
+            for step in range(self.n_max_steps):
+                if render:
+                    self.env.render()
+
+                # Get the model's prediction
+                action = np.argmax(self.actor_model.predict(state.reshape(1, self.state_space_size)))
                 state, reward, done, _ = self.env.step(action)
                 score_trial += reward
                 # Check whether the game is over or not

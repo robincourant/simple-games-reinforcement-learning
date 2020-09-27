@@ -1,7 +1,8 @@
 import gym
 
 from agents import (
-    DeepQLearningAgent,
+    ACAgent,
+    # DQNAgent,
     # KeyboardAgent,
     # NaiveLearningAgent,
     # RandomAgent,
@@ -11,8 +12,8 @@ from agents import (
 def main():
     reward_threshold = -190
     env = gym.make("MountainCar-v0")
-    agent = DeepQLearningAgent(env, reward_threshold)
-    # agent.play(n_episodes=100, render=True)
+    agent = ACAgent(env, reward_threshold)
+    agent.play(n_episodes=100, render=True)
     env.close()
 
 

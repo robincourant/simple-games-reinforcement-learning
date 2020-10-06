@@ -4,7 +4,7 @@ import numpy as np
 
 from basic_plots import frequency_plot
 from agents import (
-    DeepQLearningAgent,
+    DQNAgent,
     # KeyboardAgent,
     # NaiveLearningAgent,
     RandomAgent,
@@ -43,8 +43,8 @@ def main():
     # keys_to_action = {(275, ): 1, (276, ): 0}
     reward_threshold = 195
     env_v0 = gym.make("CartPole-v0")
-    agent = DeepQLearningAgent(env_v0, reward_threshold)
-    # agent.play(n_episodes=100, render=True)
+    agent = DQNAgent(env_v0, reward_threshold)
+    agent.play(n_episodes=100, render=True)
     env_v0.close()
 
 

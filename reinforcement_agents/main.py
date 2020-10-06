@@ -8,6 +8,7 @@ from reinforcement_agents.agents import (
     ACAgent,
     DQNAgent,
     KeyboardAgent,
+    LoadedAgent,
     NaiveLearningAgent,
     RandomAgent,
 )
@@ -24,11 +25,13 @@ AVAILABLE_AGENTS = {
     "naive": NaiveLearningAgent,
     "deep-q-network": DQNAgent,
     "actor-critic": ACAgent,
+    "loaded": LoadedAgent,
 }
 
 
 def play_game():
     """Play a given game with a given agent in command line."""
+    # TODO: default keyboard, loaded path and save model
     parser = argparse.ArgumentParser("Play a given game with a given agent")
 
     parser.add_argument(

@@ -50,7 +50,9 @@ class Agent:
         new_state: np.array,
         done: bool,
     ):
-        """Store the agent’s experiences in replay memory.
+        """
+        TODO REMOVE
+        Store the agent’s experiences in replay memory.
 
         :replay_memory:
         :param state: agent's observation of the current environment.
@@ -63,6 +65,7 @@ class Agent:
 
     @staticmethod
     def update_weights(main_model, target_model, tau):
+        """TODO REMOVE"""
         main_weights = main_model.get_weights()
         target_weights = target_model.get_weights()
         for i in range(len(target_weights)):
@@ -77,6 +80,7 @@ class KeyboardAgent(Agent):
     # Spacebar: 27 -> 32 / r: 114 -> 114
     # NanoNotes: http://en.qi-hardware.com/wiki/Key_codes
     # keysym: http://www.tcl.tk/man/tcl8.4/TkCmd/keysyms.htm
+    # keys_to_action = {(275, ): 1, (276, ): 0}
     keysyms_to_NanoNotes = {65362: 273, 65364: 274, 65363: 275, 65361: 276, 32: 27, 114: 114}
 
     def __init__(self, *args, keys_to_action=None):

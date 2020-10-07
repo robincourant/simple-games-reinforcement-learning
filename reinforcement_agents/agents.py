@@ -12,8 +12,9 @@ from tensorflow.keras.optimizers import Adam
 
 from models import (
     create_actor_mlp,
-    create_basic_mlp,
+    create_random_mlp,
     create_critic_mlp,
+    create_small_mlp,
 )
 
 
@@ -96,7 +97,7 @@ class BasePolicyAgent(BaseAgent):
     ):
         """
         Update each target model's weights with the following rule:
-                        (main_weights * tau) + (target_weights * (1 - tau))
+                    (main_weights * tau) + (target_weights * (1 - tau))
 
         :param training_model: model previously trained.
         :param target_model: target model to update.
@@ -379,11 +380,10 @@ class NaiveLearningAgent(BasePolicyAgent):
         """
         x_train, y_train = self.get_training_data()
 
-        model = create_basic_mlp(
+        model = create_random_mlp(
             n_features=self.state_space_size,
             n_categories=self.action_space_size,
             loss="categorical_crossentropy",
-            proba_output=True,
         )
         model.fit(x_train, y_train, epochs=5)
 
@@ -405,23 +405,25 @@ class DQNAgent(BasePolicyAgent):
         self.tau = .125
         self.batch_size = 32
         self.training_render = False
-        self.max_training_episode = 500
+        self.n_target_success = 5
+        self.max_training_episode = 100
         self.save = False
 
         t0 = time()
-        self.model = create_basic_mlp(
+        self.model = create_small_mlp(
             n_features=self.state_space_size,
             n_categories=self.action_space_size,
             loss="mean_squared_error",
             optimizer=Adam(lr=self.learning_rate)
         )
-        self.target_model = create_basic_mlp(
+        self.target_model = create_small_mlp(
             n_features=self.state_space_size,
             n_categories=self.action_space_size,
             loss="mean_squared_error",
             optimizer=Adam(lr=self.learning_rate)
         )
-        self.model = self.train_model()
+        self.n_training_success = 0
+        self.train_model()
         print(f"Model trained in {time() - t0:.2f}s.")
 
     def play_next_step(
@@ -506,9 +508,16 @@ class DQNAgent(BasePolicyAgent):
                 print(f"Failed to complete in trial {trial} "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
             else:
-                print(f"Completed in {trial+1} trials "
+                self.n_training_success += 1
+                print(f"Success {self.n_training_success} / {self.n_target_success} - "
+                      f"Completed in {trial+1} trials "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
-                return self.model
+
+                if self.n_training_success > self.n_target_success:
+                    return
+                else:
+                    self.train_model()
+                    return
 
 
 class ACAgent(BasePolicyAgent):

@@ -26,21 +26,46 @@ def save_model(
     print("Model saved.")
 
 
-def create_basic_mlp(
+def create_small_mlp(
     n_features: int,
     n_categories: int,
     loss: str = "categorical_crossentropy",
     optimizer: str = "adam",
-    proba_output: bool = False,
     metrics: List[str] = ["accuracy"],
 ) -> Sequential:
-    """Build and compile a MLP classifier with 6 layers and dropout.
+    """Build and compile a small MLP classifier.
 
     :param n_features: number of input features (input shape).
     :param n_categories: number of output categories (output shape).
     :param loss:
     :param optimizer:
-    :param proba_output:
+    :param metrics:
+    :return: compiled model.
+    """
+    model = Sequential()
+    model.add(Dense(24, input_dim=n_features, activation="relu"))
+    model.add(Dense(48, activation="relu"))
+    model.add(Dense(24, activation="relu"))
+    model.add(Dense(n_categories))
+
+    model.compile(loss=loss, optimizer=optimizer)
+
+    return model
+
+
+def create_random_mlp(
+    n_features: int,
+    n_categories: int,
+    loss: str = "categorical_crossentropy",
+    optimizer: str = "adam",
+    metrics: List[str] = ["accuracy"],
+) -> Sequential:
+    """Build and compile a MLP classifier with heavy dropout.
+
+    :param n_features: number of input features (input shape).
+    :param n_categories: number of output categories (output shape).
+    :param loss:
+    :param optimizer:
     :param metrics:
     :return: compiled model.
     """
@@ -56,11 +81,7 @@ def create_basic_mlp(
     dropout_4 = Dropout(0.5)(hidden_layer_4)
     hidden_layer_5 = Dense(128, activation="relu")(dropout_4)
     dropout_5 = Dropout(0.5)(hidden_layer_5)
-
-    if proba_output:
-        output_layer = Dense(n_categories, activation="softmax")(dropout_5)
-    else:
-        output_layer = Dense(n_categories)(dropout_5)
+    output_layer = Dense(n_categories, activation="softmax")(dropout_5)
 
     model = Model(inputs=input_layer, outputs=output_layer)
     model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
@@ -71,7 +92,6 @@ def create_basic_mlp(
 def create_actor_mlp(
     n_features: int,
     n_categories: int,
-    proba_output: bool = False
 ) -> Tuple[Input, Sequential]:
     """Build and compile a MLP classifier with 6 layers and dropout.
 
@@ -87,11 +107,7 @@ def create_actor_mlp(
     hidden_layer_1 = Dense(24, activation='relu')(model_input)
     hidden_layer_2 = Dense(48, activation='relu')(hidden_layer_1)
     hidden_layer_3 = Dense(24, activation='relu')(hidden_layer_2)
-
-    if proba_output:
-        output_layer = Dense(n_categories, activation='relu')(hidden_layer_3)
-    else:
-        output_layer = Dense(n_categories)(hidden_layer_3)
+    output_layer = Dense(n_categories)(hidden_layer_3)
 
     model = Model(inputs=model_input, outputs=output_layer)
 

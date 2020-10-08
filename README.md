@@ -1,25 +1,41 @@
 # Get Started
 
-```
-virtualenv -p ~/.pyenv/versions/3.6.8/bin/python3.6 env
-```
+Set a python 3.6 virtual environment and set your `PYTHONPATH` env variable to the root of the project is it not the case.
 
+Then run the following command to install all necessary libraries:
 ```
 pip install -r requirements.txt
 ```
 
-# Cart-Pole
+# Games
 
-## Cart-Pole-v0
+There are currently 2 different games:
+  - Cart-pole: this game is solved if the average score over 100 consecutive trials is greater than or equal to 195.
+  - Mountain-car: this game is solved if the average score over 100 consecutive trials is greater than or equal to -110.
 
-> Considered solved when the average reward is greater than or equal to 195.0 over 100 consecutive trials.
 
-## Cart-Pole-v1
+# Agents
 
-> Considered solved when the average reward is greater than or equal to 475.0 over 100 consecutive trials.
+## Type of agents
 
-# Mountain-Car
+There are currently 5 different type of agents able to play:
+  - `KeyboardAgent`: this agent is controlled with the keyboard. Press 'r' to restart a trial and spacebar to pause it, otherwise, playing keys depend on the game.
+  - `RandomAgent`: this agent chooses its next move randomly.
+  - `NaiveLearningAgent`: this agent generates a training set with random moves, and learns from the best ones.
+  - `DQNAgent`: or Deep-Q-Network agent approximates the policy with a neural network.
+  - `ACAgent`: or Actor-Critic agent is a deep-Q-network agent (actor network) with an extra network (critic network) that evaluates and influences the actor network decision.
 
-> Considered solved when the the position 0.5 is reached before 200 steps.
 
-Mnih, V., Kavukcuoglu, K., Silver, D., Graves, A., Antonoglou, I., Wierstra, D., & Riedmiller, M.A. (2013). Playing Atari with Deep Reinforcement Learning. ArXiv, abs/1312.5602.
+## Agents' performances
+
+
+|                      | Cart-pole | Mountain-car |
+| :------------------: | :-------: | :----------: |
+|   `KeyboardAgent`    |     O     |      O       |
+|    `RandomAgent`     |           |              |
+| `NaiveLearningAgent` |           |              |
+|      `DQNAgent`      |     O     |      X       |
+|      `ACAgent`       |           |              |
+
+O: the game is solved by the agent
+X: the game is not solved by the agent

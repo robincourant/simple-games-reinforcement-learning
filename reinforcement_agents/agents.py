@@ -12,13 +12,14 @@ from tensorflow.keras.optimizers import Adam
 
 from models import (
     create_actor_mlp,
-    create_basic_mlp,
+    create_random_mlp,
     create_critic_mlp,
-    save_model
+    create_small_mlp,
 )
 
 
-class Agent:
+class BaseAgent:
+    """Agent with specified environment (+ action and state space features) and score threshold."""
 
     def __init__(
         self,
@@ -41,6 +42,36 @@ class Agent:
             self.action_space_size = self.env.action_space.shape[0]
         self.state_space_size = self.env.observation_space.shape[0]
 
+
+class BasePolicyAgent(BaseAgent):
+    """
+    Agent that can play a game with a method `play_next_step` and
+    a model that can predict the next action.
+    """
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    @staticmethod
+    def pick_random_samples(
+        replay_memory: List[List[Any]],
+        batch_size: int,
+    ) -> Tuple[Any, Any, Any, Any, Any]:
+        """Pick `batch_size` random samples from `replay_memory`
+
+        :replay_memory: list containing agent’s experiences.
+        :param batch_size: number of sample to collect.
+        :return: states, new_states, dones, rewards, actions.
+        """
+        samples = np.array(random.sample(replay_memory, batch_size))
+        states = np.array([it[0] for it in samples]).reshape(batch_size, -1)
+        new_states = np.array([it[3] for it in samples]).reshape(batch_size, -1)
+        dones = np.array([it[4] for it in samples]).reshape(batch_size, -1)
+        rewards = np.array([it[2] for it in samples]).reshape(batch_size, -1)
+        actions = np.array([it[1] for it in samples]).reshape(batch_size, -1)
+
+        return states, new_states, dones, rewards, actions
+
     @staticmethod
     def store_transition(
         replay_memory: List[List[Any]],
@@ -50,11 +81,9 @@ class Agent:
         new_state: np.array,
         done: bool,
     ):
-        """
-        TODO REMOVE
-        Store the agent’s experiences in replay memory.
+        """Store agent’s experiences in replay memory.
 
-        :replay_memory:
+        :replay_memory: list containing agent’s experiences.
         :param state: agent's observation of the current environment.
         :param action: an action provided by the agent.
         :param reward: amount of reward returned after previous action.
@@ -64,45 +93,91 @@ class Agent:
         replay_memory.append([state, action, reward, new_state, done])
 
     @staticmethod
-    def update_weights(main_model, target_model, tau):
-        """TODO REMOVE"""
-        main_weights = main_model.get_weights()
+    def update_target_weights(
+        training_model: Sequential,
+        target_model: Sequential,
+        tau: float,
+    ):
+        """
+        Update each target model's weights with the following rule:
+                    (main_weights * tau) + (target_weights * (1 - tau))
+
+        :param training_model: model previously trained.
+        :param target_model: target model to update.
+        :param tau: learning parameter.
+        """
+        # Get main and target models' weights
+        main_weights = training_model.get_weights()
         target_weights = target_model.get_weights()
+        # Update each target weight
         for i in range(len(target_weights)):
             target_weights[i] = main_weights[i] * tau + target_weights[i] * (1 - tau)
         target_model.set_weights(target_weights)
 
+    def play_next_step(
+        self,
+        state: np.array,
+    ) -> np.array:
+        """
+        Get the next action to execute given the current state: here it is only
+        to initialize `get_action` method.
 
-class KeyboardAgent(Agent):
+        :param state: agent's observation of the current environment.
+        :return: next action to execute.
+        """
+        pass
+
+    def play(
+        self,
+        n_episodes: int = 100,
+        render: bool = True,
+    ) -> np.array:
+        """Generate `n_episodes` trials and return every scores.
+
+        :param n_episodes: number of trials to generate (default: 100 trials).
+        :param render: whether to display the environment when generating trials default: False).
+        :return: list of scores of all predicted trials.
+        """
+        scores = []
+        for _ in range(n_episodes):
+            state = self.env.reset()
+
+            score_trial = 0
+            for step in range(self.n_max_steps):
+                if render:
+                    self.env.render()
+
+                # Get the next action
+                action = self.play_next_step(state)
+                state, reward, done, _ = self.env.step(action)
+                score_trial += reward
+
+                # Check whether the game is over or not
+                if done:
+                    break
+
+            scores.append(score_trial)
+            print(f"score_trial: {score_trial}")
+
+        return np.array(scores)
+
+
+class KeyboardAgent(BaseAgent):
     """Keyboard policy. Press 'r' to restart a trial and spacebar to pause it."""
 
     # Up: 273 -> 65362 / Down: 274 -> 65364 / Left: 276 -> 65361 / Right: 275 -> 65363
     # Spacebar: 27 -> 32 / r: 114 -> 114
     # NanoNotes: http://en.qi-hardware.com/wiki/Key_codes
     # keysym: http://www.tcl.tk/man/tcl8.4/TkCmd/keysyms.htm
-    # keys_to_action = {(275, ): 1, (276, ): 0}
     keysyms_to_NanoNotes = {65362: 273, 65364: 274, 65363: 275, 65361: 276, 32: 27, 114: 114}
 
-    def __init__(self, *args, keys_to_action=None):
+    def __init__(self, *args, keys_to_action={(275, ): 1, (276, ): 0}):
         super().__init__(*args)
 
         self.action = 0
         self.restart = False
         self.pause = False
-
-        if not keys_to_action:
-            try:
-                self.keys_to_action = self.env.get_keys_to_action()
-            except AttributeError:
-                pass
-
-            try:
-                self.keys_to_action = self.env.unwrapped.get_keys_to_action()
-            except AttributeError:
-                print(f"{self.env.spec.id} does not have explicit key to action mapping, "
-                      "please specify one manually")
-        else:
-            self.keys_to_action = keys_to_action
+        self.keys_to_action = keys_to_action
 
         self.NO_ACTION_KEY = self.keys_to_action[()] if () in self.keys_to_action else 0
         self.RESTART_KEY = 114
@@ -146,10 +221,12 @@ class KeyboardAgent(Agent):
     def play(
         self,
         n_episodes: int = 1,
+        render: bool = True
     ) -> np.array:
         """Generate `n_episodes` trials and return every scores.
 
         :param n_episodes: number of trials to generate (default: 1 trial).
+        :param render: whether to display the environment (always true, only used to normalize `play` method)
         :return: list of scores of all predicted trials.
         """
         self.env.reset()
@@ -182,70 +259,74 @@ class KeyboardAgent(Agent):
                 if done:
                     break
 
-                sleep(0.01)
+                sleep(0.09)
 
             scores.append(score_trial)
+            print(f"score_trial: {score_trial}")
             k_episode += 1
 
         return np.array(scores)
 
 
-class RandomAgent(Agent):
+class RandomAgent(BasePolicyAgent):
     """Random policy."""
 
-    def play(
+    def play_next_step(
         self,
-        n_episodes: int = 100,
-        render: bool = False,
+        state: np.array,
     ) -> np.array:
-        """Generate `n_episodes` trials and return every scores.
+        """Get the next action to execute given the current state following the random policy.
 
-        :param n_episodes: number of trials to generate (default: 100 trials).
-        :param render: whether to display the environment when generating trials default: False).
-        :return: list of scores of all predicted trials.
+        :param state: agent's observation of the current environment.
+        :return: next action to execute.)
         """
-        scores = list()
-        for trial in range(n_episodes):
-            self.env.reset()
-            score_trial = 0
-
-            for step in range(self.n_max_steps):
-                if render:
-                    self.env.render()
-
-                # Warning: `action` is related to the previous state
-                action = np.random.randint(0, self.action_space_size)
-                _, reward, done, _ = self.env.step(action)
-                score_trial += reward
-
-                # Check whether the game is over or not
-                if done:
-                    break
-
-            scores.append(score_trial)
-
-        return np.array(scores)
+        return np.random.randint(0, self.action_space_size)
 
 
-class NaiveLearningAgent(Agent):
-    """Policy learnt from best games of a random agent"""
+class LoadedAgent(BasePolicyAgent):
+    """Load a pre-trained model."""
+
+    def __init__(self, model_path):
+        self.model = pickle.load(open(model_path, "rb"))
+        print("Model loaded.")
+
+    def play_next_step(
+        self,
+        state: np.array,
+    ) -> np.array:
+        """Get the next action to execute given the current state following the model's predictions.
+
+        :param state: agent's observation of the current environment.
+        :return: next action to execute.)
+        """
+        return np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
+
+
+class NaiveLearningAgent(BasePolicyAgent):
+    """Policy learnt from best games of a random agent."""
 
     def __init__(self, *args):
         super().__init__(*args)
 
-        self.save = False
+        t0 = time()
+        self.model = create_random_mlp(
+            n_features=self.state_space_size,
+            n_categories=self.action_space_size,
+            loss="categorical_crossentropy",
+        )
+        self.train_model()
+        print(f"Model trained in {time() - t0:.2f}s.")
 
-        file_path = "/".join(["models", self.env_name, "naive_learning_agent.pkl"])
-        try:
-            self.model = pickle.load(open(file_path, "rb"))
-            print("Model loaded.")
-        except FileNotFoundError:
-            print("No existing model. Training one ...")
-            t0 = time()
-            self.model = self.train_model()
-            print(f"Model trained in {time() - t0:.2f}s.")
-            if self.save:
-                save_model(self.model, file_path)
+    def play_next_step(
+        self,
+        state: np.array,
+    ) -> np.array:
+        """Get the next action to execute given the current state following the model's predictions.
+
+        :param state: agent's observation of the current environment.
+        :return: next action to execute.)
+        """
+        return np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
 
     def get_training_data(
         self,
@@ -299,59 +380,13 @@ class NaiveLearningAgent(Agent):
 
         return np.array(x_train), to_categorical(np.array(y_train))
 
-    def train_model(
-        self
-    ) -> Sequential:
-        """Gather training data and train a basic MLP model.
-
-        :return: trained model.
-        """
+    def train_model(self):
+        """Gather training data and train a basic MLP model."""
         x_train, y_train = self.get_training_data()
-
-        model = create_basic_mlp(
-            n_features=self.state_space_size,
-            n_categories=self.action_space_size,
-            loss="categorical_crossentropy",
-            proba_output=True,
-        )
-        model.fit(x_train, y_train, epochs=5)
-
-        return model
-
-    def play(
-        self,
-        n_episodes: int = 100,
-        render: bool = False,
-    ) -> np.array:
-        """Generate `n_episodes` trials and return every scores.
-
-        :param n_episodes: number of trials to generate (default: 100 trials).
-        :param render: whether to display the environment when generating trials default: False).
-        :return: list of scores of all predicted trials.
-        """
-        scores = []
-        for _ in range(n_episodes):
-            state = self.env.reset()
-
-            score_trial = 0
-            for step in range(self.n_max_steps):
-                if render:
-                    self.env.render()
-
-                # Get the model's prediction
-                action = np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
-                state, reward, done, _ = self.env.step(action)
-                score_trial += reward
-                # Check whether the game is over or not
-                if done:
-                    break
-
-            scores.append(score_trial)
-
-        return np.array(scores)
+        self.model.fit(x_train, y_train, epochs=5)
 
 
-class DQNAgent(Agent):
+class DQNAgent(BasePolicyAgent):
     """Policy learnt through deep Q-learning (Deep Q-Network)."""
 
     def __init__(self, *args):
@@ -366,32 +401,37 @@ class DQNAgent(Agent):
         self.tau = .125
         self.batch_size = 32
         self.training_render = False
-        self.max_training_episode = 500
+        self.n_target_success = 5
+        self.max_training_episode = 1000
         self.save = False
 
-        file_path = "/".join(["models", self.env_name, "deep_Q_learning_agent.pkl"])
-        try:
-            self.model = pickle.load(open(file_path, "rb"))
-            print("Model loaded.")
-        except FileNotFoundError:
-            print("No existing model. Training one ...")
-            t0 = time()
-            self.model = create_basic_mlp(
-                n_features=self.state_space_size,
-                n_categories=self.action_space_size,
-                loss="mean_squared_error",
-                optimizer=Adam(lr=self.learning_rate)
-            )
-            self.target_model = create_basic_mlp(
-                n_features=self.state_space_size,
-                n_categories=self.action_space_size,
-                loss="mean_squared_error",
-                optimizer=Adam(lr=self.learning_rate)
-            )
-            self.model = self.train_model()
-            print(f"Model trained in {time() - t0:.2f}s.")
-            if self.save:
-                save_model(self.model, file_path)
+        t0 = time()
+        self.model = create_small_mlp(
+            n_features=self.state_space_size,
+            n_categories=self.action_space_size,
+            loss="mean_squared_error",
+            optimizer=Adam(lr=self.learning_rate)
+        )
+        self.target_model = create_small_mlp(
+            n_features=self.state_space_size,
+            n_categories=self.action_space_size,
+            loss="mean_squared_error",
+            optimizer=Adam(lr=self.learning_rate)
+        )
+        self.n_training_success = 0
+        self.train_model()
+        print(f"Model trained in {time() - t0:.2f}s.")
+
+    def play_next_step(
+        self,
+        state: np.array,
+    ) -> np.array:
+        """Get the next action to execute given the current state following the model's predictions.
+
+        :param state: agent's observation of the current environment.
+        :return: next action to execute.)
+        """
+        return np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
 
     def get_action(
         self,
@@ -409,38 +449,29 @@ class DQNAgent(Agent):
             return self.env.action_space.sample()
         return np.argmax(self.model.predict(state)[0])
 
-    def replay(
-        self
-    ):
+    def replay(self):
         """Experience replay: train model from `batch_size` random previous agent’s experiences."""
         # Check there is enough sample to feed the model
         if len(self.replay_memory) < self.batch_size:
             return
 
         # Pick `batch_size` random samples from `replay_memory`
-        samples = np.array(random.sample(self.replay_memory, self.batch_size))
-        states = np.array([it[0] for it in samples]).reshape(self.batch_size, -1)
-        new_states = np.array([it[3] for it in samples]).reshape(self.batch_size, -1)
-        dones = np.array([it[4] for it in samples]).reshape(self.batch_size, -1)
-        rewards = np.array([it[2] for it in samples]).reshape(self.batch_size, -1)
-        actions = np.array([it[1] for it in samples]).reshape(self.batch_size, -1)
+        states, new_states, dones, rewards, actions = self.pick_random_samples(
+            self.replay_memory,
+            self.batch_size
+        )
         # Find best actions predicted by current Q-values
         Q_values = self.target_model.predict(states)
         Q_next = np.amax(self.target_model.predict(new_states), axis=1).reshape(self.batch_size, -1)
         # Terminal states' rewards are not changed, but cumulative discounted reward is added to
-        # non-terminal states' rewards, and update Q-values
+        # non-terminal states' rewards, and Q-values are updated
         new_rewards = (rewards + ((1 - dones) * Q_next * self.gamma)).reshape(self.batch_size, -1)
         np.put_along_axis(Q_values, actions.reshape(self.batch_size, -1), new_rewards, axis=1)
 
         self.model.fit(states, Q_values, epochs=1, verbose=0)
 
-    def train_model(
-        self
-    ) -> Sequential:
-        """Train the deep Q-network and save it.
-
-        :return: trained model.
-        """
+    def train_model(self):
+        """Train the deep Q-network and save it."""
         for trial in range(self.max_training_episode):
             t0 = time()
             score_trial = 0
@@ -449,13 +480,13 @@ class DQNAgent(Agent):
             for step in range(self.n_max_steps):
                 if self.training_render:
                     self.env.render()
-                # Select a random action or the best prediction of `model`
+                # Select a random action or the best prediction of the model
                 action = self.get_action(state)
                 new_state, reward, done, _ = self.env.step(action)
                 new_state = new_state.reshape(1, self.state_space_size)
                 self.store_transition(self.replay_memory, state, action, reward, new_state, done)
                 self.replay()
-                self.update_weights(self.model, self.target_model, self.tau)
+                self.update_target_weights(self.model, self.target_model, self.tau)
 
                 state = new_state
                 score_trial += reward
@@ -463,51 +494,24 @@ class DQNAgent(Agent):
                 if done:
                     break
 
-            # Check whether the trial is completed of not
+            # Check whether the trial is completed or not
             if score_trial <= self.reward_threshold:
                 print(f"Failed to complete in trial {trial} "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
             else:
-                print(f"Completed in {trial+1} trials "
+                self.n_training_success += 1
+                print(f"Success {self.n_training_success} / {self.n_target_success} - "
+                      f"Completed in {trial+1} trials "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
-                return self.model
 
-    def play(
-        self,
-        n_episodes: int = 100,
-        render: bool = True,
-    ) -> np.array:
-        """
-        Generate `n_episodes` trials and return every scores.
-
-        :param n_episodes: number of trials to generate (default: 100 trials).
-        :param render: whether to display the environment when generating trials default: False).
-        :return: list of scores of all predicted trials.
-        """
-        scores = []
-        for _ in range(n_episodes):
-            state = self.env.reset()
-
-            score_trial = 0
-            for step in range(self.n_max_steps):
-                if render:
-                    self.env.render()
-
-                # Get the model's prediction
-                action = np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
-                state, reward, done, _ = self.env.step(action)
-                score_trial += reward
-                # Check whether the game is over or not
-                if done:
-                    break
-
-            scores.append(score_trial)
-            print(f"score_trial: {score_trial}")
-
-        return np.array(scores)
+                if self.n_training_success > self.n_target_success:
+                    return
+                else:
+                    self.train_model()
+                    return
 
 
-class ACAgent(Agent):
+class ACAgent(BasePolicyAgent):
     """(Actor Critic)."""
 
     def __init__(self, *args):
@@ -526,13 +530,6 @@ class ACAgent(Agent):
         self.max_training_episode = 500
         self.save = False
 
-        # file_path = "/".join(["models", self.env_name, "deep_Q_learning_agent.pkl"])
-        # try:
-        #     self.model = pickle.load(open(file_path, "rb"))
-        #     print("Model loaded.")
-        # except FileNotFoundError:
-        #     print("No existing model. Training one ...")
-
         t0 = time()
         # Actor model parameterisation
         self.actor_model = create_actor_mlp(self.state_space_size, self.action_space_size)
@@ -544,6 +541,17 @@ class ACAgent(Agent):
 
         self.actor_model, self.target_model = self.train_model()
         print(f"Model trained in {time() - t0:.2f}s.")
+
+    def play_next_step(
+        self,
+        state: np.array,
+    ) -> np.array:
+        """Get the next action to execute given the current state following the actor model's predictions.
+
+        :param state: agent's observation of the current environment.
+        :return: next action to execute.)
+        """
+        return np.argmax(self.actor_model.predict(state.reshape(1, self.state_space_size)))
 
     def get_action(
         self,
@@ -631,21 +639,15 @@ class ACAgent(Agent):
             return
 
         # Pick `batch_size` random samples from `replay_memory`
-        samples = np.array(random.sample(self.replay_memory, self.batch_size))
-        states = np.array([it[0] for it in samples]).reshape(self.batch_size, -1)
-        new_states = np.array([it[3] for it in samples]).reshape(self.batch_size, -1)
-        dones = np.array([it[4] for it in samples]).reshape(self.batch_size, -1)
-        rewards = np.array([it[2] for it in samples]).reshape(self.batch_size, -1)
-        actions = np.array([it[1] for it in samples]).reshape(self.batch_size, -1)
+        states, new_states, dones, rewards, actions = self.pick_random_samples(
+            self.replay_memory, self.batch_size)
 
         actions = to_categorical(actions, self.action_space_size)
 
         self._fit_critic_model(states, new_states, dones, rewards, actions)
         self._fit_actor_model(states)
 
-    def train_model(
-        self
-    ) -> Sequential:
+    def train_model(self):
         """"""
         for trial in range(self.max_training_episode):
             t0 = time()
@@ -662,8 +664,8 @@ class ACAgent(Agent):
                 new_state = new_state.reshape(1, self.state_space_size)
                 self.store_transition(self.replay_memory, state, action, reward, new_state, done)
                 self.replay()
-                self.update_weights(self.actor_model, self.target_actor_model, self.tau)
-                self.update_weights(self.critic_model, self.target_critic_model, self.tau)
+                self.update_target_weights(self.actor_model, self.target_actor_model, self.tau)
+                self.update_target_weights(self.critic_model, self.target_critic_model, self.tau)
 
                 state = new_state
                 score_trial += reward
@@ -678,38 +680,3 @@ class ACAgent(Agent):
             else:
                 print(f"Completed in {trial+1} trials "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
-                return self.actor_model, self.critic_model
-
-    def play(
-        self,
-        n_episodes: int = 100,
-        render: bool = True,
-    ) -> np.array:
-        """
-        Generate `n_episodes` trials and return every scores.
-
-        :param n_episodes: number of trials to generate (default: 100 trials).
-        :param render: whether to display the environment when generating trials default: False).
-        :return: list of scores of all predicted trials.
-        """
-        scores = []
-        for _ in range(n_episodes):
-            state = self.env.reset()
-
-            score_trial = 0
-            for step in range(self.n_max_steps):
-                if render:
-                    self.env.render()
-
-                # Get the model's prediction
-                action = np.argmax(self.actor_model.predict(state.reshape(1, self.state_space_size)))
-                state, reward, done, _ = self.env.step(action)
-                score_trial += reward
-                # Check whether the game is over or not
-                if done:
-                    break
-
-            scores.append(score_trial)
-            print(f"score_trial: {score_trial}")
-
-        return np.array(scores)

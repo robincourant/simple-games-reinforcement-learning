@@ -304,8 +304,14 @@ class NaiveLearningAgent(BasePolicyAgent):
 
     def __init__(self, *args):
         super().__init__(*args)
+
         t0 = time()
-        self.model = self.train_model()
+        self.model = create_random_mlp(
+            n_features=self.state_space_size,
+            n_categories=self.action_space_size,
+            loss="categorical_crossentropy",
+        )
+        self.train_model()
         print(f"Model trained in {time() - t0:.2f}s.")
 
     def play_next_step(
@@ -371,23 +377,10 @@ class NaiveLearningAgent(BasePolicyAgent):
 
         return np.array(x_train), to_categorical(np.array(y_train))
 
-    def train_model(
-        self
-    ) -> Sequential:
-        """Gather training data and train a basic MLP model.
-
-        :return: trained model.
-        """
+    def train_model(self):
+        """Gather training data and train a basic MLP model."""
         x_train, y_train = self.get_training_data()
-
-        model = create_random_mlp(
-            n_features=self.state_space_size,
-            n_categories=self.action_space_size,
-            loss="categorical_crossentropy",
-        )
-        model.fit(x_train, y_train, epochs=5)
-
-        return model
+        self.model.fit(x_train, y_train, epochs=5)
 
 
 class DQNAgent(BasePolicyAgent):
@@ -406,7 +399,7 @@ class DQNAgent(BasePolicyAgent):
         self.batch_size = 32
         self.training_render = False
         self.n_target_success = 5
-        self.max_training_episode = 100
+        self.max_training_episode = 1000
         self.save = False
 
         t0 = time()
@@ -453,9 +446,7 @@ class DQNAgent(BasePolicyAgent):
             return self.env.action_space.sample()
         return np.argmax(self.model.predict(state)[0])
 
-    def replay(
-        self
-    ):
+    def replay(self):
         """Experience replay: train model from `batch_size` random previous agent’s experiences."""
         # Check there is enough sample to feed the model
         if len(self.replay_memory) < self.batch_size:
@@ -463,24 +454,21 @@ class DQNAgent(BasePolicyAgent):
 
         # Pick `batch_size` random samples from `replay_memory`
         states, new_states, dones, rewards, actions = self.pick_random_samples(
-            self.replay_memory, self.batch_size)
+            self.replay_memory,
+            self.batch_size
+        )
         # Find best actions predicted by current Q-values
         Q_values = self.target_model.predict(states)
         Q_next = np.amax(self.target_model.predict(new_states), axis=1).reshape(self.batch_size, -1)
         # Terminal states' rewards are not changed, but cumulative discounted reward is added to
-        # non-terminal states' rewards, and update Q-values
+        # non-terminal states' rewards, and Q-values are updated
         new_rewards = (rewards + ((1 - dones) * Q_next * self.gamma)).reshape(self.batch_size, -1)
         np.put_along_axis(Q_values, actions.reshape(self.batch_size, -1), new_rewards, axis=1)
 
         self.model.fit(states, Q_values, epochs=1, verbose=0)
 
-    def train_model(
-        self
-    ) -> Sequential:
-        """Train the deep Q-network and save it.
-
-        :return: trained model.
-        """
+    def train_model(self):
+        """Train the deep Q-network and save it."""
         for trial in range(self.max_training_episode):
             t0 = time()
             score_trial = 0
@@ -489,7 +477,7 @@ class DQNAgent(BasePolicyAgent):
             for step in range(self.n_max_steps):
                 if self.training_render:
                     self.env.render()
-                # Select a random action or the best prediction of `model`
+                # Select a random action or the best prediction of the model
                 action = self.get_action(state)
                 new_state, reward, done, _ = self.env.step(action)
                 new_state = new_state.reshape(1, self.state_space_size)
@@ -503,9 +491,9 @@ class DQNAgent(BasePolicyAgent):
                 if done:
                     break
 
-            # Check whether the trial is completed of not
+            # Check whether the trial is completed or not
             if score_trial <= self.reward_threshold:
-                print(f"Failed to complete in trial {trial} "
+                print(f"Failed to complete in trial {trial} {step} "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
             else:
                 self.n_training_success += 1
@@ -656,9 +644,7 @@ class ACAgent(BasePolicyAgent):
         self._fit_critic_model(states, new_states, dones, rewards, actions)
         self._fit_actor_model(states)
 
-    def train_model(
-        self
-    ) -> Sequential:
+    def train_model(self):
         """"""
         for trial in range(self.max_training_episode):
             t0 = time()
@@ -691,4 +677,3 @@ class ACAgent(BasePolicyAgent):
             else:
                 print(f"Completed in {trial+1} trials "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
-                return self.actor_model, self.critic_model

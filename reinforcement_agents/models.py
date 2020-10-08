@@ -1,6 +1,6 @@
 import os
 import pickle
-from typing import Any, List, Tuple
+from typing import Any
 
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Add, Dense, Dropout, Input
@@ -31,15 +31,13 @@ def create_small_mlp(
     n_categories: int,
     loss: str = "categorical_crossentropy",
     optimizer: str = "adam",
-    metrics: List[str] = ["accuracy"],
 ) -> Sequential:
     """Build and compile a small MLP classifier.
 
     :param n_features: number of input features (input shape).
     :param n_categories: number of output categories (output shape).
-    :param loss:
-    :param optimizer:
-    :param metrics:
+    :param loss: loss used to train the model.
+    :param optimizer: optimizer used to train the model.
     :return: compiled model.
     """
     model = Sequential()
@@ -58,15 +56,13 @@ def create_random_mlp(
     n_categories: int,
     loss: str = "categorical_crossentropy",
     optimizer: str = "adam",
-    metrics: List[str] = ["accuracy"],
 ) -> Sequential:
     """Build and compile a MLP classifier with heavy dropout.
 
     :param n_features: number of input features (input shape).
     :param n_categories: number of output categories (output shape).
-    :param loss:
-    :param optimizer:
-    :param metrics:
+    :param loss: loss used to train the model.
+    :param optimizer: optimizer used to train the model.
     :return: compiled model.
     """
     input_layer = Input(shape=(n_features, ))
@@ -84,7 +80,7 @@ def create_random_mlp(
     output_layer = Dense(n_categories, activation="softmax")(dropout_5)
 
     model = Model(inputs=input_layer, outputs=output_layer)
-    model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
+    model.compile(loss=loss, optimizer=optimizer)
 
     return model
 
@@ -92,16 +88,12 @@ def create_random_mlp(
 def create_actor_mlp(
     n_features: int,
     n_categories: int,
-) -> Tuple[Input, Sequential]:
+) -> Sequential:
     """Build and compile a MLP classifier with 6 layers and dropout.
 
-    :param n_state_features:
-    :param n_categories:
-    :param batch_size:
-    :param loss:
-    :param optimizer:
-    :param metrics:
-    :return:
+    :param n_features: number of input features (input shape).
+    :param n_categories: number of output categories (output shape).
+    :return: raw model.
     """
     model_input = Input(shape=(n_features,))
     hidden_layer_1 = Dense(24, activation='relu')(model_input)
@@ -119,16 +111,14 @@ def create_critic_mlp(
     n_action_features: int,
     loss: Any = "mse",
     optimizer: Any = "adam",
-) -> Tuple[Input, Input, Sequential]:
+) -> Sequential:
     """Build and compile a MLP classifier with 6 layers and dropout.
 
-    :param n_state_features:
-    :param n_action_features:
-    :param batch_size:
-    :param loss:
-    :param optimizer:
-    :param metrics:
-    :return:
+    :param n_features: number of input features (input shape).
+    :param n_categories: number of output categories (output shape).
+    :param loss: loss used to train the model.
+    :param optimizer: optimizer used to train the model.
+    :return: compiled model.
     """
     state_input = Input(shape=(n_state_features,))
     state_h1 = Dense(24, activation='relu')(state_input)

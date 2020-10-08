@@ -1,6 +1,5 @@
 import argparse
 
-from bokeh.io import show
 import gym
 import numpy as np
 
@@ -12,8 +11,6 @@ from reinforcement_agents.agents import (
     NaiveLearningAgent,
     RandomAgent,
 )
-from utils.basic_plots import frequency_plot
-
 
 AVAILABLE_GAMES = {
     "cart-pole": "CartPole-v0",
@@ -57,40 +54,16 @@ def play_game():
         action="store_true",
         help="whether to display or not the environment"
     )
+    parser.add_argument(
+        "-p", "--model-path",
+        help="path to save the trained model. If not provided, it will not be saved."
+    )
     args = parser.parse_args()
 
     env = gym.make(AVAILABLE_GAMES[args.game])
-    agent = AVAILABLE_AGENTS[args.agent](env, args.threshold)
+    agent = AVAILABLE_AGENTS[args.agent](env, args.threshold, args.model_path)
     agent.play(n_episodes=args.n_episodes, render=args.display)
     env.close()
-
-
-def display_random_score_vs_threshold(
-    env: gym.Env,
-    n_episodes: int,
-):
-    """
-    Display (in html format) the chart of the distribution of scores
-    of a random agent for a given number of trials.
-
-    :param env: gym enviroment object.
-    :param n_episodes: number of trials to generate.
-    """
-    max_score = env.spec.max_episode_steps
-    random_agent = RandomAgent(env=env)
-    scores = random_agent.play(n_episodes=n_episodes)
-
-    samples_distribution = list()
-    for _threshold in np.arange(0, max_score, 5):
-        inds, = np.where(scores > _threshold)
-        samples_distribution.append(inds.size)
-
-    distribution_plot = frequency_plot(
-        np.array(scores), max_score + 1, (0, max_score),
-        f"Distribution of scores (for {n_episodes:.0e} trials)",
-        "Score", "Number of trials")
-
-    show(distribution_plot)
 
 
 if __name__ == "__main__":

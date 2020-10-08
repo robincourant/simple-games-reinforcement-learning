@@ -1,4 +1,3 @@
-import pickle
 import random
 from time import time, sleep
 from typing import Any, List, Tuple
@@ -6,7 +5,7 @@ from typing import Any, List, Tuple
 import gym
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.optimizers import Adam
 
@@ -15,6 +14,7 @@ from models import (
     create_random_mlp,
     create_critic_mlp,
     create_small_mlp,
+    save_model,
 )
 
 
@@ -25,6 +25,7 @@ class BaseAgent:
         self,
         env: gym.Env,
         reward_threshold: int = -np.inf,
+        model_path: str = None,
     ):
         """
         :param env: gym enviroment object.
@@ -33,6 +34,7 @@ class BaseAgent:
         self.env = env
         self.env_name = self.env.spec.id
         self.reward_threshold = reward_threshold
+        self.model_path = model_path
 
         # Get the maximum number of step per trial and the size of the action and state space
         self.n_max_steps = self.env.spec.max_episode_steps
@@ -43,7 +45,7 @@ class BaseAgent:
         self.state_space_size = self.env.observation_space.shape[0]
 
 
-class BasePolicyAgent(BaseAgent):
+class SmartAgent(BaseAgent):
     """
     Agent that can play a game with a method `play_next_step` and
     a model that can predict the next action.
@@ -146,7 +148,7 @@ class BasePolicyAgent(BaseAgent):
             for step in range(self.n_max_steps):
                 if render:
                     self.env.render()
-
+                # Warning: `action` is related to the previous state
                 # Get the next action
                 action = self.play_next_step(state)
                 state, reward, done, _ = self.env.step(action)
@@ -158,6 +160,8 @@ class BasePolicyAgent(BaseAgent):
 
             scores.append(score_trial)
             print(f"score_trial: {score_trial}")
+
+        print(f"Average score: {round(np.mean(scores), 1)} over {n_episodes} trials")
 
         return np.array(scores)
 
@@ -268,7 +272,7 @@ class KeyboardAgent(BaseAgent):
         return np.array(scores)
 
 
-class RandomAgent(BasePolicyAgent):
+class RandomAgent(SmartAgent):
     """Random policy."""
 
     def play_next_step(
@@ -283,11 +287,12 @@ class RandomAgent(BasePolicyAgent):
         return np.random.randint(0, self.action_space_size)
 
 
-class LoadedAgent(BasePolicyAgent):
+class LoadedAgent(SmartAgent):
     """Load a pre-trained model."""
 
-    def __init__(self, model_path):
-        self.model = pickle.load(open(model_path, "rb"))
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.model = load_model(self.model_path)
         print("Model loaded.")
 
     def play_next_step(
@@ -302,7 +307,7 @@ class LoadedAgent(BasePolicyAgent):
         return np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
 
 
-class NaiveLearningAgent(BasePolicyAgent):
+class NaiveLearningAgent(SmartAgent):
     """Policy learnt from best games of a random agent."""
 
     def __init__(self, *args):
@@ -316,6 +321,8 @@ class NaiveLearningAgent(BasePolicyAgent):
         )
         self.train_model()
         print(f"Model trained in {time() - t0:.2f}s.")
+        if self.model_path:
+            save_model(self.model, self.model_path)
 
     def play_next_step(
         self,
@@ -350,17 +357,17 @@ class NaiveLearningAgent(BasePolicyAgent):
             state = self.env.reset()
 
             score_trial = 0
-            x_trial = list()  # Store every states of the current trial
-            y_trial = list()  # Store every actions of the current trial
+            trial_states = list()  # Store every states of the current trial
+            trial_action = list()  # Store every actions of the current trial
 
             for step in range(self.n_max_steps):
                 # Warning: `action` is related to the previous state
-                # Pick a random action (move left = 0, move right = 1)
+                # Pick a random action
                 action = np.random.randint(0, self.action_space_size)
                 new_state, reward, done, _ = self.env.step(action)
 
-                x_trial.append(state)
-                y_trial.append(action)
+                trial_states.append(state)
+                trial_action.append(action)
                 score_trial += reward
                 state = new_state
 
@@ -369,14 +376,12 @@ class NaiveLearningAgent(BasePolicyAgent):
                     break
 
             if score_trial > min_score:
-                x_train.extend(x_trial)
-                y_train.extend(y_trial)
+                x_train.extend(trial_states)
+                y_train.extend(trial_action)
                 scores.append(score_trial)
 
-        print(f"Training score average: {np.mean(scores)}")
-        print(f"Training score median: {np.median(scores)}")
-        print(f"Number of training samples: {len(scores)}")
-        print()
+        print(f"Training score average: {round(np.mean(scores),)}")
+        print(f"Training score median: {round(np.median(scores),)} \n")
 
         return np.array(x_train), to_categorical(np.array(y_train))
 
@@ -386,7 +391,7 @@ class NaiveLearningAgent(BasePolicyAgent):
         self.model.fit(x_train, y_train, epochs=5)
 
 
-class DQNAgent(BasePolicyAgent):
+class DQNAgent(SmartAgent):
     """Policy learnt through deep Q-learning (Deep Q-Network)."""
 
     def __init__(self, *args):
@@ -480,6 +485,7 @@ class DQNAgent(BasePolicyAgent):
             for step in range(self.n_max_steps):
                 if self.training_render:
                     self.env.render()
+                # Warning: `action` is related to the previous state
                 # Select a random action or the best prediction of the model
                 action = self.get_action(state)
                 new_state, reward, done, _ = self.env.step(action)
@@ -511,7 +517,7 @@ class DQNAgent(BasePolicyAgent):
                     return
 
 
-class ACAgent(BasePolicyAgent):
+class ACAgent(SmartAgent):
     """(Actor Critic)."""
 
     def __init__(self, *args):
@@ -657,7 +663,7 @@ class ACAgent(BasePolicyAgent):
             for step in range(self.n_max_steps):
                 if self.training_render:
                     self.env.render()
-
+                # Warning: `action` is related to the previous state
                 # Select a random action or the best prediction of `actor_model`
                 action = self.get_action(state)
                 new_state, reward, done, _ = self.env.step(action)

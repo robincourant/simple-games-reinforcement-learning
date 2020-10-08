@@ -1,5 +1,4 @@
 import os
-import pickle
 from typing import Any
 
 from tensorflow.keras.models import Sequential, Model
@@ -20,10 +19,8 @@ def save_model(
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-    # Save the model
-    with open(file_path, "wb") as dump_file:
-        pickle.dump(model, dump_file)
-    print("Model saved.")
+    model.save(file_path)
+    print(f"Model saved at {file_path}.")
 
 
 def create_small_mlp(

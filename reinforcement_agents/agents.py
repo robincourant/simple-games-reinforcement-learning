@@ -44,7 +44,10 @@ class BaseAgent:
 
 
 class BasePolicyAgent(BaseAgent):
-    """Agent that can play a game with a method model that can predict the next action."""
+    """
+    Agent that can play a game with a method `play_next_step` and
+    a model that can predict the next action.
+    """
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -493,7 +496,7 @@ class DQNAgent(BasePolicyAgent):
 
             # Check whether the trial is completed or not
             if score_trial <= self.reward_threshold:
-                print(f"Failed to complete in trial {trial} {step} "
+                print(f"Failed to complete in trial {trial} "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
             else:
                 self.n_training_success += 1

@@ -90,7 +90,7 @@ class SmartAgent(BaseAgent):
         :param action: an action provided by the agent.
         :param reward: amount of reward returned after previous action.
         :param new_state: agent's observation of the next environment.
-        :param done: wether the episode has ended.
+        :param done: whether the episode has ended.
         """
         replay_memory.append([state, action, reward, new_state, done])
 
@@ -137,7 +137,7 @@ class SmartAgent(BaseAgent):
         """Generate `n_episodes` trials and return every scores.
 
         :param n_episodes: number of trials to generate (default: 100 trials).
-        :param render: wether to display the environment when generating trials default: False).
+        :param render: whether to display the environment when generating trials default: False).
         :return: list of scores of all predicted trials.
         """
         scores = []
@@ -154,7 +154,7 @@ class SmartAgent(BaseAgent):
                 state, reward, done, _ = self.env.step(action)
                 score_trial += reward
 
-                # Check wether the game is over or not
+                # Check whether the game is over or not
                 if done:
                     break
 
@@ -230,7 +230,7 @@ class KeyboardAgent(BaseAgent):
         """Generate `n_episodes` trials and return every scores.
 
         :param n_episodes: number of trials to generate (default: 1 trial).
-        :param render: wether to display the environment (always true, only used to normalize `play` method)
+        :param render: whether to display the environment (always true, only used to normalize `play` method)
         :return: list of scores of all predicted trials.
         """
         self.env.reset()
@@ -252,14 +252,14 @@ class KeyboardAgent(BaseAgent):
                 _, reward, done, _ = self.env.step(self.action)
                 score_trial += reward
                 k_step += 1
-                # Check wether the user wants to pause the trial
+                # Check whether the user wants to pause the trial
                 while self.pause:
                     self.env.render()
                     self.pause
-                # Check wether the user wants to restart the trial
+                # Check whether the user wants to restart the trial
                 if self.restart:
                     break
-                # Check wether the game is over or not
+                # Check whether the game is over or not
                 if done:
                     break
 
@@ -371,7 +371,7 @@ class NaiveLearningAgent(SmartAgent):
                 score_trial += reward
                 state = new_state
 
-                # Check wether the game is over or not
+                # Check whether the game is over or not
                 if done:
                     break
 
@@ -389,7 +389,7 @@ class NaiveLearningAgent(SmartAgent):
     def train_model(self):
         """Gather training data and train a basic MLP model."""
         x_train, y_train, scores = self.get_training_data()
-        # Check wether training data is empty or not
+        # Check whether training data is empty or not
         if x_train.size:
             print(f"Training score average: {round(np.mean(scores),)}")
             print(f"Training score median: {round(np.median(scores),)} \n")
@@ -411,7 +411,7 @@ class DQNAgent(SmartAgent):
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
         self.learning_rate = 0.01
-        self.tau = .05
+        self.tau = 0.125
         self.batch_size = 32
         self.training_render = False
         self.n_target_success = 5
@@ -510,7 +510,7 @@ class DQNAgent(SmartAgent):
                 if done:
                     break
 
-            # Check wether the trial is completed or not
+            # Check whether the trial is completed or not
             if score_trial <= self.reward_threshold:
                 print(f"Failed to complete in trial {trial} "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
@@ -691,7 +691,7 @@ class ACAgent(SmartAgent):
                 if done:
                     break
 
-            # Check wether the trial is completed or not
+            # Check whether the trial is completed or not
             if score_trial <= self.reward_threshold:
                 print(f"Failed to complete in trial {trial} "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")

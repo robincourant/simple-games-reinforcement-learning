@@ -28,7 +28,7 @@ AVAILABLE_AGENTS = {
 
 def play_game():
     """Play a given game with a given agent in command line."""
-    # TODO: default keyboard, loaded path and save model
+    # TODO: default keyboard
     parser = argparse.ArgumentParser("Play a given game with a given agent")
 
     parser.add_argument(
@@ -56,6 +56,7 @@ def play_game():
     )
     parser.add_argument(
         "-p", "--model-path",
+        metavar='',
         help="path to save the trained model. If not provided, it will not be saved."
     )
     args = parser.parse_args()

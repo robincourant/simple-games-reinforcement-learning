@@ -90,7 +90,7 @@ class SmartAgent(BaseAgent):
         :param action: an action provided by the agent.
         :param reward: amount of reward returned after previous action.
         :param new_state: agent's observation of the next environment.
-        :param done: whether the episode has ended.
+        :param done: wether the episode has ended.
         """
         replay_memory.append([state, action, reward, new_state, done])
 
@@ -137,11 +137,11 @@ class SmartAgent(BaseAgent):
         """Generate `n_episodes` trials and return every scores.
 
         :param n_episodes: number of trials to generate (default: 100 trials).
-        :param render: whether to display the environment when generating trials default: False).
+        :param render: wether to display the environment when generating trials default: False).
         :return: list of scores of all predicted trials.
         """
         scores = []
-        for _ in range(n_episodes):
+        for episode in range(n_episodes):
             state = self.env.reset()
 
             score_trial = 0
@@ -154,12 +154,12 @@ class SmartAgent(BaseAgent):
                 state, reward, done, _ = self.env.step(action)
                 score_trial += reward
 
-                # Check whether the game is over or not
+                # Check wether the game is over or not
                 if done:
                     break
 
             scores.append(score_trial)
-            print(f"score_trial: {score_trial}")
+            print(f"Trial {episode} / {n_episodes} - score: {score_trial}")
 
         print(f"Average score: {round(np.mean(scores), 1)} over {n_episodes} trials")
 
@@ -230,7 +230,7 @@ class KeyboardAgent(BaseAgent):
         """Generate `n_episodes` trials and return every scores.
 
         :param n_episodes: number of trials to generate (default: 1 trial).
-        :param render: whether to display the environment (always true, only used to normalize `play` method)
+        :param render: wether to display the environment (always true, only used to normalize `play` method)
         :return: list of scores of all predicted trials.
         """
         self.env.reset()
@@ -252,21 +252,21 @@ class KeyboardAgent(BaseAgent):
                 _, reward, done, _ = self.env.step(self.action)
                 score_trial += reward
                 k_step += 1
-                # Check whether the user wants to pause the trial
+                # Check wether the user wants to pause the trial
                 while self.pause:
                     self.env.render()
                     self.pause
-                # Check whether the user wants to restart the trial
+                # Check wether the user wants to restart the trial
                 if self.restart:
                     break
-                # Check whether the game is over or not
+                # Check wether the game is over or not
                 if done:
                     break
 
                 sleep(0.09)
 
             scores.append(score_trial)
-            print(f"score_trial: {score_trial}")
+            print(f"Trial score: {score_trial}")
             k_episode += 1
 
         return np.array(scores)
@@ -337,17 +337,17 @@ class NaiveLearningAgent(SmartAgent):
 
     def get_training_data(
         self,
-    ) -> Tuple[np.array, np.array]:
+    ) -> Tuple[np.array, np.array, np.array]:
         """
         Generate `n_training_episodes` with `n_max_steps` and keep only trials' data with a
         score greater than `min_score`.
 
         : return: state of each steps and their related actions.
         """
-        # Minimum score to take into account an trial in the training data
-        min_score = 70  # TODO
+        # Minimum score of a trial take into account in training data
+        min_score = self.reward_threshold - (0.5 * abs(self.reward_threshold))
         # Number of trials to gather training data
-        n_episodes = int(10e3)
+        n_episodes = int(10e4)
 
         x_train = list()  # Store every states of all trials
         y_train = list()  # Store every actions of all trials
@@ -371,7 +371,7 @@ class NaiveLearningAgent(SmartAgent):
                 score_trial += reward
                 state = new_state
 
-                # Check whether the game is over or not
+                # Check wether the game is over or not
                 if done:
                     break
 
@@ -380,15 +380,23 @@ class NaiveLearningAgent(SmartAgent):
                 y_train.extend(trial_action)
                 scores.append(score_trial)
 
-        print(f"Training score average: {round(np.mean(scores),)}")
-        print(f"Training score median: {round(np.median(scores),)} \n")
-
-        return np.array(x_train), to_categorical(np.array(y_train))
+        return (
+            np.array(x_train),
+            to_categorical(np.array(y_train), num_classes=self.action_space_size),
+            np.array(scores)
+        )
 
     def train_model(self):
         """Gather training data and train a basic MLP model."""
-        x_train, y_train = self.get_training_data()
-        self.model.fit(x_train, y_train, epochs=5)
+        x_train, y_train, scores = self.get_training_data()
+        # Check wether training data is empty or not
+        if x_train.size:
+            print(f"Training score average: {round(np.mean(scores),)}")
+            print(f"Training score median: {round(np.median(scores),)} \n")
+            self.model.fit(x_train, y_train, epochs=5)
+
+        else:
+            print("Empty training set. Lower the minimum traing score.")
 
 
 class DQNAgent(SmartAgent):
@@ -403,11 +411,11 @@ class DQNAgent(SmartAgent):
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
         self.learning_rate = 0.01
-        self.tau = .125
+        self.tau = .05
         self.batch_size = 32
         self.training_render = False
         self.n_target_success = 5
-        self.max_training_episode = 1000
+        self.max_training_episode = 500
         self.save = False
 
         t0 = time()
@@ -426,6 +434,8 @@ class DQNAgent(SmartAgent):
         self.n_training_success = 0
         self.train_model()
         print(f"Model trained in {time() - t0:.2f}s.")
+        if self.model_path:
+            save_model(self.model, self.model_path)
 
     def play_next_step(
         self,
@@ -500,7 +510,7 @@ class DQNAgent(SmartAgent):
                 if done:
                     break
 
-            # Check whether the trial is completed or not
+            # Check wether the trial is completed or not
             if score_trial <= self.reward_threshold:
                 print(f"Failed to complete in trial {trial} "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
@@ -510,7 +520,7 @@ class DQNAgent(SmartAgent):
                       f"Completed in {trial+1} trials "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")
 
-                if self.n_training_success > self.n_target_success:
+                if self.n_training_success >= self.n_target_success:
                     return
                 else:
                     self.train_model()
@@ -547,6 +557,8 @@ class ACAgent(SmartAgent):
 
         self.actor_model, self.target_model = self.train_model()
         print(f"Model trained in {time() - t0:.2f}s.")
+        if self.model_path:
+            save_model(self.model, self.model_path)
 
     def play_next_step(
         self,
@@ -679,7 +691,7 @@ class ACAgent(SmartAgent):
                 if done:
                     break
 
-            # Check whether the trial is completed or not
+            # Check wether the trial is completed or not
             if score_trial <= self.reward_threshold:
                 print(f"Failed to complete in trial {trial} "
                       f"(score: {score_trial}, time: {time() - t0:.2f}s)")

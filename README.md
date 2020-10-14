@@ -7,6 +7,18 @@ Then run the following command to install all necessary libraries:
 pip install -r requirements.txt
 ```
 
+To launch a 15 games of cart-pole with a score threshold of 195.0 and a deep-Q-network agent, use the following command:
+```
+python reinforcement_agents/main.py -n 15 -t 195 cart-pole deep-q-network
+```
+
+For more details run:
+```
+python reinforcement_agents/main.py -h
+```
+
+Models should be saved in a folder `simple-games-reinforcement-learning/saved_models/`, it will be ignored by git.
+
 # Games
 
 There are currently 2 different games:
@@ -25,17 +37,16 @@ There are currently 5 different type of agents able to play:
   - `DQNAgent`: or Deep-Q-Network agent approximates the policy with a neural network.
   - `ACAgent`: or Actor-Critic agent is a deep-Q-network agent (actor network) with an extra network (critic network) that evaluates and influences the actor network decision.
 
+The `LoadedAgent` allows to load a pre-trained agent/model.
 
 ## Agents' performances
 
+Average scores over 100 games:
 
 |                      | Cart-pole | Mountain-car |
 | :------------------: | :-------: | :----------: |
-|   `KeyboardAgent`    |     O     |      O       |
-|    `RandomAgent`     |           |              |
-| `NaiveLearningAgent` |           |              |
-|      `DQNAgent`      |     O     |      X       |
+|   `KeyboardAgent`    |     -     |      -       |
+|    `RandomAgent`     |   20.9    |     -200     |
+| `NaiveLearningAgent` |   184.3   |     -200     |
+|      `DQNAgent`      |   200.0   |              |
 |      `ACAgent`       |           |              |
-
-O: the game is solved by the agent
-X: the game is not solved by the agent

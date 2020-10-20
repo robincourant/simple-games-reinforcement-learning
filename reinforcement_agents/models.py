@@ -1,8 +1,7 @@
 import os
-from typing import Any
 
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Add, Dense, Dropout, Input
+from tensorflow.keras.layers import Dense, Dropout, Input
 
 
 def save_model(
@@ -82,53 +81,21 @@ def create_random_mlp(
     return model
 
 
-def create_actor_mlp(
-    n_features: int,
-    n_categories: int,
+def create_actor_critic_mlp(
+    n_state_features: int,
+    n_action_features: int,
 ) -> Sequential:
-    """Build and compile a MLP classifier with 6 layers and dropout.
+    """
 
     :param n_features: number of input features (input shape).
     :param n_categories: number of output categories (output shape).
     :return: raw model.
     """
-    model_input = Input(shape=(n_features,))
-    hidden_layer_1 = Dense(24, activation='relu')(model_input)
-    hidden_layer_2 = Dense(48, activation='relu')(hidden_layer_1)
-    hidden_layer_3 = Dense(24, activation='relu')(hidden_layer_2)
-    output_layer = Dense(n_categories)(hidden_layer_3)
-
-    model = Model(inputs=model_input, outputs=output_layer)
-
-    return model
-
-
-def create_critic_mlp(
-    n_state_features: int,
-    n_action_features: int,
-    loss: Any = "mse",
-    optimizer: Any = "adam",
-) -> Sequential:
-    """Build and compile a MLP classifier with 6 layers and dropout.
-
-    :param n_features: number of input features (input shape).
-    :param n_categories: number of output categories (output shape).
-    :param loss: loss used to train the model.
-    :param optimizer: optimizer used to train the model.
-    :return: compiled model.
-    """
     state_input = Input(shape=(n_state_features,))
-    state_h1 = Dense(24, activation='relu')(state_input)
-    state_h2 = Dense(48, activation='relu')(state_h1)
+    common_layers = Dense(128, activation="relu")(state_input)
+    actor_output = Dense(n_action_features, activation="softmax")(common_layers)
+    critic_output = Dense(1)(common_layers)
 
-    action_input = Input(shape=(n_action_features,))
-    action_h1 = Dense(48, activation='relu')(action_input)
-
-    state_action = Add()([state_h2, action_h1])
-    state_action_h1 = Dense(24, activation='relu')(state_action)
-    model_output = Dense(1, activation='linear')(state_action_h1)
-
-    model = Model(inputs=[state_input, action_input], outputs=model_output)
-    model.compile(loss=loss, optimizer=optimizer)
+    model = Model(inputs=state_input, outputs=[actor_output, critic_output])
 
     return model

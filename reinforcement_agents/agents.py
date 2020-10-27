@@ -533,7 +533,7 @@ class ACAgent(SmartAgent):
         super().__init__(*args)
 
         self.replay_memory: List[List[Any]] = list()
-        self.gamma = 0.99
+        self.gamma = 0.95
         self.learning_rate = 0.01
         self.tau = .125
         self.huber_loss = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)

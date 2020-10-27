@@ -39,14 +39,3 @@ There are currently 5 different type of agents able to play:
 
 The `LoadedAgent` allows to load a pre-trained agent/model.
 
-## Agents' performances
-
-Average scores over 100 games:
-
-|                      | Cart-pole | Mountain-car |
-| :------------------: | :-------: | :----------: |
-|   `KeyboardAgent`    |     -     |      -       |
-|    `RandomAgent`     |   20.9    |     -200     |
-| `NaiveLearningAgent` |   184.3   |     -200     |
-|      `DQNAgent`      |   200.0   |              |
-|      `ACAgent`       |           |              |

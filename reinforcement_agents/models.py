@@ -85,10 +85,10 @@ def create_actor_critic_mlp(
     n_state_features: int,
     n_action_features: int,
 ) -> Sequential:
-    """
+    """Build a non-compiled actor-critic network: 1 input and 2 outputs.
 
-    :param n_features: number of input features (input shape).
-    :param n_categories: number of output categories (output shape).
+    :param n_state_features: number of state features (input shape).
+    :param n_state_features: number of action features (action output shape).
     :return: raw model.
     """
     state_input = Input(shape=(n_state_features,))

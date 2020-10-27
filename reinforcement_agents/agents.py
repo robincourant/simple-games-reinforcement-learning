@@ -18,7 +18,7 @@ from models import (
 
 
 class BaseAgent:
-    """Agent with specified environment (+ action and state space features) and score threshold."""
+    """Basic agent with specified environment (+ action and state space features) and score threshold."""
 
     def __init__(
         self,
@@ -35,12 +35,14 @@ class BaseAgent:
         self.reward_threshold = reward_threshold
         self.model_path = model_path
 
-        # Get the maximum number of step per trial and the size of the action and state space
+        # Get the maximum number of step per trial
         self.n_max_steps = self.env.spec.max_episode_steps
+        # Get the size of the action
         if isinstance(self.env.action_space, gym.spaces.discrete.Discrete):
             self.action_space_size = self.env.action_space.n
         if isinstance(self.env.action_space, gym.spaces.box.Box):
             self.action_space_size = self.env.action_space.shape[0]
+        # Get the state of the action
         self.state_space_size = self.env.observation_space.shape[0]
 
 
@@ -54,17 +56,19 @@ class SmartAgent(BaseAgent):
         super().__init__(*args)
 
     @staticmethod
-    def pick_random_samples(
+    def select_random_samples(
         replay_memory: List[List[Any]],
         batch_size: int,
     ) -> Tuple[Any, Any, Any, Any, Any]:
-        """Pick `batch_size` random samples from `replay_memory`
+        """Select `batch_size` random samples from `replay_memory`.
 
         :replay_memory: list containing agent’s experiences.
         :param batch_size: number of sample to collect.
         :return: states, new_states, dones, rewards, actions.
         """
+        # Select random samples
         samples = np.array(random.sample(replay_memory, batch_size))
+        # Decompose each sample into arrays
         states = np.array([it[0] for it in samples]).reshape(batch_size, -1)
         new_states = np.array([it[3] for it in samples]).reshape(batch_size, -1)
         dones = np.array([it[4] for it in samples]).reshape(batch_size, -1)
@@ -172,9 +176,23 @@ class KeyboardAgent(BaseAgent):
     # Spacebar: 27 -> 32 / r: 114 -> 114
     # NanoNotes: http://en.qi-hardware.com/wiki/Key_codes
     # keysym: http://www.tcl.tk/man/tcl8.4/TkCmd/keysyms.htm
-    keysyms_to_NanoNotes = {65362: 273, 65364: 274, 65363: 275, 65361: 276, 32: 27, 114: 114}
+    keysyms_to_NanoNotes = {
+        65362: 273,
+        65364: 274,
+        65363: 275,
+        65361: 276,
+        32: 27,
+        114: 114,
+    }
 
-    def __init__(self, *args, keys_to_action={(275, ): 1, (276, ): 0}):
+    def __init__(
+        self,
+        *args,
+        keys_to_action={(275, ): 1, (276, ): 0}
+    ):
+        """
+        :param keys_to_action: map a key to an action.
+        """
         super().__init__(*args)
 
         self.action = 0
@@ -202,8 +220,8 @@ class KeyboardAgent(BaseAgent):
                 self.restart = not self.restart
             if key == self.PAUSE_KEY:
                 self.pause = not self.pause
-            if (key, ) in self.keys_to_action:
-                self.action = self.keys_to_action[(key, )]
+            if (key,) in self.keys_to_action:
+                self.action = self.keys_to_action[(key,)]
 
     def key_release(
         self,
@@ -217,8 +235,8 @@ class KeyboardAgent(BaseAgent):
         """
         key = KeyboardAgent.keysyms_to_NanoNotes.get(symbol)
         if symbol:
-            if (key, ) in self.keys_to_action:
-                if self.action == self.keys_to_action[(key, )]:
+            if (key,) in self.keys_to_action:
+                if self.action == self.keys_to_action[(key,)]:
                     self.action = self.NO_ACTION_KEY
 
     def play(
@@ -281,7 +299,7 @@ class RandomAgent(SmartAgent):
         """Get the next action to execute given the current state following the random policy.
 
         :param state: agent's observation of the current environment.
-        :return: next action to execute.)
+        :return: next action to execute.
         """
         return np.random.randint(0, self.action_space_size)
 
@@ -350,7 +368,7 @@ class NaiveLearningAgent(SmartAgent):
 
         x_train = list()  # Store every states of all trials
         y_train = list()  # Store every actions of all trials
-        scores = list()   # Store every scores of all trials
+        scores = list()  # Store every scores of all trials
 
         for _ in range(n_episodes):
             state = self.env.reset()
@@ -361,7 +379,7 @@ class NaiveLearningAgent(SmartAgent):
 
             for step in range(self.n_max_steps):
                 # Warning: `action` is related to the previous state
-                # Pick a random action
+                # select a random action
                 action = np.random.randint(0, self.action_space_size)
                 new_state, reward, done, _ = self.env.step(action)
 
@@ -382,7 +400,7 @@ class NaiveLearningAgent(SmartAgent):
         return (
             np.array(x_train),
             to_categorical(np.array(y_train), num_classes=self.action_space_size),
-            np.array(scores)
+            np.array(scores),
         )
 
     def train_model(self):
@@ -422,13 +440,13 @@ class DQNAgent(SmartAgent):
             n_features=self.state_space_size,
             n_categories=self.action_space_size,
             loss="mean_squared_error",
-            optimizer=Adam(lr=self.learning_rate)
+            optimizer=Adam(lr=self.learning_rate),
         )
         self.target_model = create_small_mlp(
             n_features=self.state_space_size,
             n_categories=self.action_space_size,
             loss="mean_squared_error",
-            optimizer=Adam(lr=self.learning_rate)
+            optimizer=Adam(lr=self.learning_rate),
         )
         self.n_training_success = 0
         self.train_model()
@@ -443,7 +461,7 @@ class DQNAgent(SmartAgent):
         """Get the next action to execute given the current state following the model's predictions.
 
         :param state: agent's observation of the current environment.
-        :return: next action to execute.)
+        :return: next action to execute.
         """
         return np.argmax(self.model.predict(state.reshape(1, self.state_space_size)))
 
@@ -469,18 +487,23 @@ class DQNAgent(SmartAgent):
         if len(self.replay_memory) < self.batch_size:
             return
 
-        # Pick `batch_size` random samples from `replay_memory`
-        states, new_states, dones, rewards, actions = self.pick_random_samples(
-            self.replay_memory,
-            self.batch_size
+        # select `batch_size` random samples from `replay_memory`
+        states, new_states, dones, rewards, actions = self.select_random_samples(
+            self.replay_memory, self.batch_size
         )
         # Find best actions predicted by current Q-values
         Q_values = self.target_model.predict(states)
-        Q_next = np.amax(self.target_model.predict(new_states), axis=1).reshape(self.batch_size, -1)
+        Q_next = np.amax(self.target_model.predict(new_states), axis=1).reshape(
+            self.batch_size, -1
+        )
         # Terminal states' rewards are not changed, but cumulative discounted reward is added to
         # non-terminal states' rewards, and Q-values are updated
-        new_rewards = (rewards + ((1 - dones) * Q_next * self.gamma)).reshape(self.batch_size, -1)
-        np.put_along_axis(Q_values, actions.reshape(self.batch_size, -1), new_rewards, axis=1)
+        new_rewards = (rewards + ((1 - dones) * Q_next * self.gamma)).reshape(
+            self.batch_size, -1
+        )
+        np.put_along_axis(
+            Q_values, actions.reshape(self.batch_size, -1), new_rewards, axis=1
+        )
 
         self.model.fit(states, Q_values, epochs=1, verbose=0)
 
@@ -499,7 +522,9 @@ class DQNAgent(SmartAgent):
                 action = self.get_action(state)
                 new_state, reward, done, _ = self.env.step(action)
                 new_state = new_state.reshape(1, self.state_space_size)
-                self.store_transition(self.replay_memory, state, action, reward, new_state, done)
+                self.store_transition(
+                    self.replay_memory, state, action, reward, new_state, done
+                )
                 self.replay()
                 self.update_target_weights(self.model, self.target_model, self.tau)
 
@@ -511,13 +536,17 @@ class DQNAgent(SmartAgent):
 
             # Check whether the trial is completed or not
             if score_trial < self.reward_threshold:
-                print(f"Failed to complete in trial {trial} "
-                      f"(score: {score_trial}, time: {time() - t0:.2f}s)")
+                print(
+                    f"Failed to complete in trial {trial} "
+                    f"(score: {score_trial}, time: {time() - t0:.2f}s)"
+                )
             else:
                 self.n_training_success += 1
-                print(f"Success {self.n_training_success} / {self.n_target_success} - "
-                      f"Completed in {trial+1} trials "
-                      f"(score: {score_trial}, time: {time() - t0:.2f}s)")
+                print(
+                    f"Success {self.n_training_success} / {self.n_target_success} - "
+                    f"Completed in {trial+1} trials "
+                    f"(score: {score_trial}, time: {time() - t0:.2f}s)"
+                )
 
                 if self.n_training_success >= self.n_target_success:
                     break
@@ -535,7 +564,7 @@ class ACAgent(SmartAgent):
         self.replay_memory: List[List[Any]] = list()
         self.gamma = 0.95
         self.learning_rate = 0.01
-        self.tau = .125
+        self.tau = 0.125
         self.huber_loss = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
         self.n_target_success = 10
@@ -546,9 +575,6 @@ class ACAgent(SmartAgent):
         t0 = time()
         # Actor-critic model parameterisation
         self.model = create_actor_critic_mlp(
-            self.state_space_size, self.action_space_size
-        )
-        self.target_model = create_actor_critic_mlp(
             self.state_space_size, self.action_space_size
         )
 
@@ -593,10 +619,19 @@ class ACAgent(SmartAgent):
         return action, tf.math.log(action_proba[0, action]), critic_value[0, 0]
 
     def replay(self):
-        """"""
-        def get_target_values(trial_rewards):
-            eps = np.finfo(np.float32).eps.item()  # Smallest number such that 1.0 + eps != 1.0
+        """Experience replay: train model from previous agent’s trial."""
+        def get_target_values(
+            trial_rewards: np.array
+        ) -> np.array:
+            """Compute the discounted cumulative sum of the previous trial rewards.
 
+            :param trial_rewards: rewards of the previous trial.
+            :return: discounted cumulative sum.
+            """
+            # Smallest number such that 1.0 + eps != 1.0
+            eps = np.finfo(np.float32).eps.item()
+
+            # Compute the discounted cumulative sum
             target_values = []
             discounted_sum = 0
             for reward in trial_rewards[::-1]:
@@ -605,17 +640,26 @@ class ACAgent(SmartAgent):
 
             # Standardise target values
             target_values = np.array(target_values)
-            target_values = (target_values - target_values.mean()) / (target_values.std() + eps)
+            target_values = (target_values - target_values.mean()) / (
+                target_values.std() + eps
+            )
 
             return target_values
 
         def compute_loss(
             loss: tf.keras.losses,
-            log_probas,
-            critic_values,
-            target_values
+            log_probas: np.array,
+            critic_values: np.array,
+            target_values: np.array,
         ) -> float:
-            """"""
+            """Calculating loss values to update our network.
+
+            :param loss: keras implementation of the loss to use.
+            :param log_probas: values of log-proba over the previous trial.
+            :param critic_values: values of critic-values over the previous trial.
+            :param target_values: values of target-values over the previous trial.
+
+            """
             actor_losses = []
             critic_losses = []
             prediction_memory = zip(log_probas, critic_values, target_values)
@@ -625,21 +669,22 @@ class ACAgent(SmartAgent):
                 actor_loss = -log_proba * value_error
                 actor_losses.append(actor_loss)
                 # Compute loss of the critic component
-                critic_loss = loss(tf.expand_dims(critic_values, 0), tf.expand_dims(target_value, 0))
+                critic_loss = loss(
+                    tf.expand_dims(critic_values, 0), tf.expand_dims(target_value, 0)
+                )
                 critic_losses.append(critic_loss)
 
             return sum(actor_losses) + sum(critic_losses)
 
+        # Get features of the previous trial in `replay_memory`
         trial_action_probas, trial_critic_values, trial_rewards = self.replay_memory
+        # Compute the target values (discounted cumulative sum of rewards)
         target_values = get_target_values(trial_rewards)
+        # Compute the loss
         actor_critic_loss = compute_loss(
-            self.huber_loss,
-            trial_action_probas,
-            trial_critic_values,
-            target_values
+            self.huber_loss, trial_action_probas, trial_critic_values, target_values
         )
-
-        # Backpropagation
+        # Backpropagation to update our network
         grads = self.tape.gradient(actor_critic_loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
@@ -659,34 +704,39 @@ class ACAgent(SmartAgent):
                 for step in range(self.n_max_steps):
                     if self.training_render:
                         self.env.render()
-
+                    # Predict an action, its probability and a critic value given the currenrt state
                     action, action_log_proba, critic_value = self.get_action_value(state)
                     trial_critic_values.append(critic_value)
                     trial_action_probas.append(action_log_proba)
-
                     # Apply the sampled action in our environment
                     state, reward, done, _ = self.env.step(action)
                     trial_rewards.append(reward)
                     score_trial += reward
 
-                    # self.update_target_weights(self.model, self.target_model, self.tau)
-
                     if done:
                         break
 
-                self.replay_memory = [trial_action_probas, trial_critic_values, trial_rewards]
+                self.replay_memory = [
+                    trial_action_probas,
+                    trial_critic_values,
+                    trial_rewards,
+                ]
                 self.replay()
             self.update_target_weights(self.model, self.target_model, self.tau)
 
             # Check whether the trial is completed or not
             if score_trial < self.reward_threshold:
-                print(f"Failed to complete in trial {trial} "
-                      f"(score: {score_trial}, time: {time() - t0:.2f}s)")
+                print(
+                    f"Failed to complete in trial {trial} "
+                    f"(score: {score_trial}, time: {time() - t0:.2f}s)"
+                )
             else:
                 self.n_training_success += 1
-                print(f"Success {self.n_training_success} / {self.n_target_success} - "
-                      f"Completed in {trial+1} trials "
-                      f"(score: {score_trial}, time: {time() - t0:.2f}s)")
+                print(
+                    f"Success {self.n_training_success} / {self.n_target_success} - "
+                    f"Completed in {trial+1} trials "
+                    f"(score: {score_trial}, time: {time() - t0:.2f}s)"
+                )
 
                 if self.n_training_success >= self.n_target_success:
                     break
